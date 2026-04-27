@@ -1,10 +1,11 @@
+
+
 import { useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
 import logo from '../../assets/londonpost.png';
 
 const NAV_HOME = [
-  { path: '/admin/hero',             label: 'Hero Section',       icon: '🎬', desc: 'Top banner video/image' },
   { path: '/admin/banners',          label: 'Ad Banners',         icon: '📢', desc: '4 homepage banners' },
   
 ];
