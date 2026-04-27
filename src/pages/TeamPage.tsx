@@ -15,7 +15,6 @@ import samirHumbatovImg from '../assets/samir-humbatov.jpg';
 import praveshGuptaImg from '../assets/pravesh-kumar-gupta.jpg';
 import sumaiyaAliImg from '../assets/sumaiya-ali.jpg';
 import utkirAlimovImg from '../assets/utkir-alimov.jpg';
-import shabnamDelfaniImg from '../assets/shabnam-delfani.jpg';
 import katsuhiroAsagiriImg from '../assets/katsuhiro-asagiri.jpg';
 
 type TeamMember = {
@@ -47,18 +46,7 @@ const teamSections: TeamSection[] = [
       },
     ],
   },
-  {
-    title: 'Deputy Editor',
-    members: [
-      {
-        name: 'Dr. Shabnam Delfani',
-        role: 'Deputy Editor',
-        image: shabnamDelfaniImg,
-        countries: [{ name: 'United Kingdom', code: 'gb' }],
-        bio: 'Professor Shabnam Delfani is an internationally recognized academic, environmental scientist, and diplomat specializing in climate change modeling, global sustainability, and women’s leadership. She holds a PhD in Environmental Management–Climate Change Modelling from the University of Plymouth, England and works across climate change, food security, water resources, waste management, and sustainability.',
-      },
-    ],
-  },
+  
   {
     title: 'Writers & Analysts',
     members: [
