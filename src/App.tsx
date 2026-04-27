@@ -1,50 +1,3 @@
-// import { Navigate, Route, Routes } from 'react-router-dom';
-// import { MainLayout } from './layouts/MainLayout';
-// import { AboutLandingPage } from './pages/AboutLandingPage';
-// import { ContactPage } from './pages/ContactPage';
-// import { HomePage } from './pages/HomePage';
-// import { LivePage } from './pages/LivePage';
-// import { MembershipPage } from './pages/MembershipPage';
-// import { MissionVisionPage } from './pages/MissionVisionPage';
-// import { NotFoundPage } from './pages/NotFoundPage';
-// import { RegionPage } from './pages/RegionPage';
-// import { RegionsLandingPage } from './pages/RegionsLandingPage';
-// import { ResearchersPage } from './pages/ResearchersPage';
-// import { SectionPage } from './pages/SectionPage';
-// import { TeamPage } from './pages/TeamPage';
-// import { WhatWeDoPage } from './pages/WhatWeDoPage';
-// import { ScrollToTop } from './components/ScrollToTop';
-
-
-
-
-// function App() {
-//   return (
-//     <MainLayout>
-//        <ScrollToTop />
-//       <Routes>
-//         <Route path="/" element={<HomePage />} />
-//         <Route path="/about" element={<AboutLandingPage />} />
-//         <Route path="/about/team" element={<TeamPage />} />
-//         <Route path="/about/researchers" element={<ResearchersPage />} />
-//         <Route path="/about/what-we-do" element={<WhatWeDoPage />} />
-//         <Route path="/contact" element={<ContactPage />} />
-//         <Route path="/regions" element={<RegionsLandingPage />} />
-//         <Route path="/live" element={<LivePage />} />
-//         <Route path="/mission-vision" element={<MissionVisionPage />} />
-//         <Route path="/membership" element={<MembershipPage />} />
-//         <Route path="/more" element={<Navigate to="/section/world-news" replace />} />
-//         <Route path="/section/:slug" element={<SectionPage />} />
-//         <Route path="/region/:area" element={<RegionPage />} />
-//         <Route path="/region/:area/:country" element={<RegionPage />} />
-//         <Route path="*" element={<NotFoundPage />} />
-//       </Routes>
-//     </MainLayout>
-//   );
-// }
-
-// export default App;
-
 
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { MainLayout } from './layouts/MainLayout';
@@ -84,6 +37,7 @@ import { ArticleDetailPage } from './pages/ArticleDetailPage';
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsAndConditionsPage } from './pages/TermsAndConditionsPage';
 import { DisclaimerPage } from './pages/DisclaimerPage';
+import { AdminAllPages } from './admin/pages/sections/AdminAllPages';
 function AppContent() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -138,6 +92,7 @@ function AppContent() {
 <Route path="membership"    element={<AdminMembership />} />
 <Route path="page-banner"   element={<AdminPageBanner />} />
 <Route path="/admin/contact-requests" element={<AdminContactRequests />} />
+<Route path="/admin/all-pages" element={<AdminAllPages />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
