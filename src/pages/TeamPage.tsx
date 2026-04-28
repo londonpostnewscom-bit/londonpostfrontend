@@ -237,7 +237,7 @@ export function TeamPage() {
             >
               <div className="mx-auto max-w-3xl text-center">
                 <div className="text-[11px] font-bold uppercase tracking-[0.34em] text-accent">
-                  London Post Team
+                  Em Insights Post Team
                 </div>
                 <h2 className="mt-3 text-2xl font-bold text-ink lg:text-3xl">
                   {section.title}
