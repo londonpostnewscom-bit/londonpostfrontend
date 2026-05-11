@@ -1,284 +1,193 @@
-
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { homeHero, liveVideos } from '../data/siteData';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const ROTATION_MS = 10000;
-const STORAGE_KEY = 'londonpost_hero_rotation_started_at';
 
-type HeroItem = {
-  _id?: string;
-  mediaType?: 'youtube' | 'image';
-  youtubeId?: string;
-  mediaUrl?: string;
-  title?: string;
-  subtitle?: string;
-  ctaText?: string;
-  ctaLink?: string;
-  ctaText2?: string;
-  ctaLink2?: string;
-  badgeText?: string;
-  previewCaption?: string;
-  isActive?: boolean;
-  order?: number;
+type HeroSlide = {
+  id:             string;
+  title:          string;
+  subtitle:       string;
+  mediaType:      'image' | 'youtube';
+  mediaUrl:       string;
+  youtubeId:      string;
+  ctaLink:        string;
+  badgeText:      string;
+  previewCaption: string;
+  isArticle:      boolean;
 };
 
+/* ── fetch article-driven hero slides ── */
+async function fetchArticleHeroes(): Promise<HeroSlide[]> {
+  try {
+    const [rr, sr] = await Promise.all([
+      fetch(`${API_URL}/region-articles/home-section/hero?limit=5`),
+      fetch(`${API_URL}/section-articles/home/hero?limit=5`),
+    ]);
+    const regionData:  any[] = rr.ok ? await rr.json() : [];
+    const sectionData: any[] = sr.ok ? await sr.json() : [];
+
+    return [...regionData, ...sectionData]
+      .sort((a, b) => (a.homeSortOrder ?? 99) - (b.homeSortOrder ?? 99))
+      .slice(0, 5)
+      .map(a => ({
+        id:             a._id || '',
+        title:          a.title || '',
+        subtitle:       a.subtitle || '',
+        mediaType:      a.videoId ? 'youtube' : 'image',
+        mediaUrl:       a.imageUrl || '',
+        youtubeId:      a.videoId  || '',
+        ctaLink:        `/article/${a._id}`,
+        badgeText:      a.category || 'Featured',
+        previewCaption: [a.author, a.date].filter(Boolean).join(' · '),
+        isArticle:      true,
+      }));
+  } catch { return []; }
+}
+
+/* ── fallback: manually created heroes ── */
+async function fetchManualHeroes(): Promise<HeroSlide[]> {
+  try {
+    const r = await fetch(`${API_URL}/hero`);
+    if (!r.ok) return [];
+    const raw = await r.json();
+    const list: any[] = Array.isArray(raw) ? raw : [raw];
+    return list.filter(Boolean).map(h => ({
+      id:             h._id || '',
+      title:          h.title || '',
+      subtitle:       h.subtitle || '',
+      mediaType:      (h.mediaType === 'youtube' ? 'youtube' : 'image') as 'image' | 'youtube',
+      mediaUrl:       h.mediaUrl  || '',
+      youtubeId:      h.youtubeId || '',
+      ctaLink:        h.ctaLink   || '#',
+      badgeText:      h.badgeText || 'Featured',
+      previewCaption: h.previewCaption || '',
+      isArticle:      false,
+    }));
+  } catch { return []; }
+}
+
 export function Hero() {
-  const [heroes, setHeroes] = useState<HeroItem[]>([]);
-  const [articleHeroes, setArticleHeroes] = useState<HeroItem[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [previousIndex, setPreviousIndex] = useState<number | null>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
-  const animationTimeoutRef = useRef<number | null>(null);
+  const [slides, setSlides]   = useState<HeroSlide[]>([]);
+  const [current, setCurrent] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`${API_URL}/all-articles/hero-slides`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        if (Array.isArray(data) && data.length) {
-          setArticleHeroes(data);
-        }
-      })
-      .catch(() => {
-        setArticleHeroes([]);
-      });
-  }, []);
-
-  useEffect(() => {
-    fetch(`${API_URL}/hero`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        const safeData: HeroItem[] = Array.isArray(data) ? data : [];
-        setHeroes(safeData);
-
-        if (safeData.length > 0) {
-          let startedAt = Number(localStorage.getItem(STORAGE_KEY) || 0);
-
-          if (!startedAt) {
-            startedAt = Date.now();
-            localStorage.setItem(STORAGE_KEY, String(startedAt));
-          }
-
-          const index =
-            Math.floor((Date.now() - startedAt) / ROTATION_MS) %
-            safeData.length;
-
-          setCurrentIndex(index);
-        }
-      })
-      .catch(() => {
-        setHeroes([]);
-      });
-  }, []);
-
-  useEffect(() => {
-    if (heroes.length <= 1) return;
-
-    const interval = window.setInterval(() => {
-      const startedAt = Number(localStorage.getItem(STORAGE_KEY) || Date.now());
-
-      const nextIndex =
-        Math.floor((Date.now() - startedAt) / ROTATION_MS) % heroes.length;
-
-      setCurrentIndex((prev) => {
-        if (prev !== nextIndex) {
-          setPreviousIndex(prev);
-          setIsAnimating(true);
-
-          if (animationTimeoutRef.current) {
-            window.clearTimeout(animationTimeoutRef.current);
-          }
-
-          animationTimeoutRef.current = window.setTimeout(() => {
-            setPreviousIndex(null);
-            setIsAnimating(false);
-          }, 700);
-
-          return nextIndex;
-        }
-
-        return prev;
-      });
-    }, 1000);
-
-    return () => {
-      window.clearInterval(interval);
-
-      if (animationTimeoutRef.current) {
-        window.clearTimeout(animationTimeoutRef.current);
+    Promise.all([fetchArticleHeroes(), fetchManualHeroes()]).then(
+      ([articleHeroes, manualHeroes]) => {
+        // Article heroes take priority; fall back to manual if none
+        setSlides(articleHeroes.length ? articleHeroes : manualHeroes);
+        setLoading(false);
       }
-    };
-  }, [heroes]);
-
-  const fallbackHero = useMemo<HeroItem>(
-    () => ({
-      title: homeHero.title,
-      subtitle: homeHero.subtitle,
-      ctaText: homeHero.cta,
-      ctaLink: '#latest',
-      ctaText2: 'Watch Live Demo',
-      ctaLink2: '/live',
-      badgeText: 'LIVE PREVIEW',
-      previewCaption:
-        'Your top hero can use a featured video, livestream or headline image.',
-      mediaType: 'youtube',
-      youtubeId: liveVideos.current.youtubeId,
-    }),
-    []
-  );
-
-  const mergedHeroes = useMemo<HeroItem[]>(() => {
-    return heroes.length > 0 ? heroes : articleHeroes;
-  }, [heroes, articleHeroes]);
-
-  const activeHero: HeroItem = mergedHeroes[currentIndex] || fallbackHero;
-
-  const outgoingHero: HeroItem | null =
-    previousIndex !== null ? mergedHeroes[previousIndex] || null : null;
-
-  const renderMedia = (hero: HeroItem) => {
-    const mediaType = hero.mediaType || 'youtube';
-    const youtubeId = hero.youtubeId || liveVideos.current.youtubeId;
-
-    if (mediaType === 'youtube') {
-      return (
-        <iframe
-          src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0`}
-          className="absolute inset-0 h-full w-full"
-          allow="autoplay; encrypted-media"
-          allowFullScreen
-          title="Hero media"
-        />
-      );
-    }
-
-    if (mediaType === 'image' && hero.mediaUrl) {
-      return (
-        <img
-          src={hero.mediaUrl}
-          alt={hero.title || 'Hero'}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      );
-    }
-
-    return null;
-  };
-
-  const SlideText = ({
-    hero,
-    state,
-  }: {
-    hero: HeroItem;
-    state: 'active' | 'outgoing';
-  }) => {
-    const title = hero.title || fallbackHero.title || '';
-    const subtitle = hero.subtitle || fallbackHero.subtitle || '';
-    const ctaText = hero.ctaText || fallbackHero.ctaText || 'Read more';
-    const ctaLink = hero.ctaLink || fallbackHero.ctaLink || '#latest';
-    const ctaText2 =
-      hero.ctaText2 || fallbackHero.ctaText2 || 'Watch Live Demo';
-    const ctaLink2 = hero.ctaLink2 || fallbackHero.ctaLink2 || '/live';
-
-    return (
-      <div
-        className={`absolute inset-0 flex flex-col justify-center transition-all duration-700 ${
-          state === 'active'
-            ? 'translate-x-0 opacity-100'
-            : '-translate-x-12 opacity-0 pointer-events-none'
-        }`}
-      >
-        <span className="inline-block w-fit rounded-full border border-accent/30 bg-accent/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-accent">
-          Leading global analysis and regional reporting
-        </span>
-
-        <h1 className="mt-6 text-4xl font-black leading-tight tracking-tight lg:text-5xl">
-          {title}
-        </h1>
-
-        <p className="mt-5 text-lg leading-relaxed text-white/65">
-          {subtitle}
-        </p>
-
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Link
-            to={ctaLink}
-            className="rounded-full bg-accent px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-          >
-            {ctaText}
-          </Link>
-
-          <Link
-            to={ctaLink2}
-            className="rounded-full border border-white/25 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10"
-          >
-            {ctaText2}
-          </Link>
-        </div>
-      </div>
     );
-  };
+  }, []);
 
-  const SlideMedia = ({
-    hero,
-    state,
-  }: {
-    hero: HeroItem;
-    state: 'active' | 'outgoing';
-  }) => {
-    const badgeText = hero.badgeText || fallbackHero.badgeText || 'LIVE PREVIEW';
+  // Auto-advance slides
+  useEffect(() => {
+    if (slides.length <= 1) return;
+    const t = setInterval(() => setCurrent(c => (c + 1) % slides.length), 6000);
+    return () => clearInterval(t);
+  }, [slides.length]);
 
-    const caption =
-      hero.previewCaption ||
-      fallbackHero.previewCaption ||
-      'Your top hero can use a featured image or livestream.';
+  if (loading) return <div className="h-[520px] animate-pulse bg-slate-900" />;
+  if (!slides.length) return null;
 
-    return (
-      <div
-        className={`absolute inset-0 transition-all duration-700 ${
-          state === 'active'
-            ? 'translate-x-0 opacity-100'
-            : 'translate-x-12 opacity-0 pointer-events-none'
-        }`}
-      >
-        <div className="relative aspect-video overflow-hidden rounded-3xl">
-          {renderMedia(hero)}
-        </div>
-
-        <div className="absolute bottom-4 left-4 right-4">
-          <div className="rounded-2xl bg-black/55 p-3 backdrop-blur-md">
-            <span className="rounded-full bg-red-600 px-2.5 py-0.5 text-xs font-bold text-white">
-              {badgeText}
-            </span>
-
-            <p className="mt-1.5 text-sm leading-snug text-white/90">
-              {caption}
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  const slide = slides[current];
 
   return (
-    <section className="bg-ink text-white">
-      <div className="mx-auto grid max-w-7xl gap-8 px-4 py-14 lg:grid-cols-2 lg:gap-12 lg:px-6 lg:py-20">
-        <div className="relative min-h-[360px] overflow-hidden">
-          {outgoingHero && isAnimating && (
-            <SlideText hero={outgoingHero} state="outgoing" />
-          )}
+    <section className="relative overflow-hidden bg-[#0c1726]">
+      {/* Subtle background glow */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute -left-40 top-0 h-96 w-96 rounded-full bg-blue-900/30 blur-[120px]" />
+        <div className="absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-indigo-900/20 blur-[120px]" />
+      </div>
 
-          <SlideText hero={activeHero} state="active" />
+      <div className="relative mx-auto max-w-7xl px-4 py-12 lg:px-6 lg:py-16">
+        <div className="grid items-center gap-10 lg:grid-cols-2">
+
+          {/* ── LEFT: text ── */}
+          <div className="order-2 lg:order-1">
+            {slide.badgeText && (
+              <span className="mb-5 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-amber-300">
+                {slide.badgeText}
+              </span>
+            )}
+
+            <h1 className="text-3xl font-black leading-tight text-white lg:text-[2.6rem] lg:leading-[1.1]">
+              {slide.title}
+            </h1>
+
+            {slide.subtitle && (
+              <p className="mt-4 text-base leading-relaxed text-slate-300 lg:text-lg">
+                {slide.subtitle}
+              </p>
+            )}
+
+            <div className="mt-8 flex flex-wrap gap-3">
+              <Link
+                to={slide.ctaLink}
+                className="rounded-full bg-amber-400 px-7 py-3 text-sm font-black text-slate-900 transition hover:bg-amber-300 hover:shadow-lg hover:shadow-amber-400/20"
+              >
+                Read More
+              </Link>
+            </div>
+          </div>
+
+          {/* ── RIGHT: media ── */}
+          <div className="order-1 lg:order-2">
+            <div className="relative overflow-hidden rounded-2xl shadow-2xl shadow-black/60">
+
+              {slide.mediaType === 'youtube' && slide.youtubeId ? (
+                <div className="aspect-video">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${slide.youtubeId}?rel=0&modestbranding=1&mute=1`}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                  />
+                </div>
+              ) : slide.mediaUrl ? (
+                <img
+                  src={slide.mediaUrl}
+                  alt={slide.title}
+                  className="w-full object-cover"
+                  style={{ maxHeight: '440px', minHeight: '260px' }}
+                />
+              ) : (
+                <div className="flex aspect-video items-center justify-center bg-slate-800">
+                  <span className="text-sm text-slate-500">No media</span>
+                </div>
+              )}
+
+              {/* Caption bar */}
+              {slide.previewCaption && (
+                <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 bg-black/70 px-4 py-2.5 backdrop-blur-sm">
+                  <span className="rounded bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
+                    {slide.isArticle ? 'Article' : 'Live Preview'}
+                  </span>
+                  <p className="truncate text-xs text-white/80">{slide.previewCaption}</p>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
-        <div className="relative min-h-[420px] overflow-hidden rounded-3xl bg-white/5 shadow-2xl">
-          {outgoingHero && isAnimating && (
-            <SlideMedia hero={outgoingHero} state="outgoing" />
-          )}
-
-          <SlideMedia hero={activeHero} state="active" />
-        </div>
+        {/* ── Slide indicators ── */}
+        {slides.length > 1 && (
+          <div className="mt-8 flex items-center justify-center gap-2">
+            {slides.map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrent(i)}
+                aria-label={`Go to slide ${i + 1}`}
+                className={`rounded-full transition-all duration-300 ${
+                  i === current
+                    ? 'h-2.5 w-8 bg-amber-400'
+                    : 'h-2.5 w-2.5 bg-white/25 hover:bg-white/50'
+                }`}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
