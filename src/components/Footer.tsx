@@ -110,7 +110,7 @@ export function Footer() {
       </div>
 
       <div className="border-t border-white/10 bg-slate-950/12 px-4 py-5 text-center text-sm text-white/80">
-        © 2026 EM Insights. All rights reserved.
+        © 2026 EM Insights. All rights reserved (Absoltix Solutions).
       </div>
     </footer>
   );
