@@ -1,3 +1,4 @@
+
 import { useEffect, useRef } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
 
@@ -13,6 +14,44 @@ const TOOLS = [
   { cmd: 'justifyCenter',       icon: '⬛ Center',   title: 'Center' },
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
 ];
+
+/* ─── Paste-cleaning helpers ──────────────────────────────────────────── */
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+/**
+ * Rebuilds clean <p> paragraphs from pasted plain text.
+ *
+ * Why this exists: copying text from news sites / many web pages puts
+ * HTML on the clipboard where the source wraps every visual LINE in its
+ * own block element (one <div>/<p>/<span> per line, sometimes even per
+ * word, for layout/ad-injection reasons on the source page). If we trust
+ * that HTML, every one of those wrapper elements survives sanitization
+ * and renders on its own row — that's the "every word on a new line" bug.
+ *
+ * The fix: ignore clipboard HTML for body text entirely. Use plain text
+ * only, and only treat a BLANK line (a real paragraph break) as the
+ * start of a new <p>. A single newline is just line-wrap noise from the
+ * source and gets collapsed into a space so words don't run together
+ * or get split apart.
+ */
+function plainTextToParagraphs(text: string): string {
+  const normalized = text
+    .replace(/\r\n/g, '\n')   // normalize Windows line endings
+    .replace(/\u00A0/g, ' '); // non-breaking spaces -> normal spaces
+
+  const chunks = normalized
+    .split(/\n\s*\n+/)                       // real paragraph break = blank line
+    .map(p => p.replace(/\n+/g, ' ').replace(/[ \t]+/g, ' ').trim())
+    .filter(Boolean);
+
+  return chunks.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+}
 
 export function RichTextEditor({ value, onChange, placeholder }: {
   value: string;
@@ -43,11 +82,16 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   };
 
-  // Key fix: intercept paste, sanitize before inserting
+  // Key fix: always paste as plain text, rebuilt into clean paragraphs.
+  // We deliberately do NOT use clipboardData's text/html for body content
+  // — that's the channel that was injecting one wrapper element per
+  // source line and making every line (or word) render on its own row.
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const raw = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
-    const clean = sanitizeHtml(raw);
+
+    const plain = e.clipboardData.getData('text/plain');
+    const clean = sanitizeHtml(plainTextToParagraphs(plain));
+
     document.execCommand('insertHTML', false, clean);
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
