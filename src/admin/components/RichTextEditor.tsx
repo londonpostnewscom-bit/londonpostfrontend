@@ -1,4 +1,3 @@
-
 import { useEffect, useRef } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
 
@@ -15,41 +14,141 @@ const TOOLS = [
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
 ];
 
-/* ─── Paste-cleaning helpers ──────────────────────────────────────────── */
+/* ─── Paste-cleaning: preserve bold/headings, fix line-break structure ──
+ *
+ * The problem this solves: copying text from news sites / many web pages
+ * puts HTML on the clipboard where the source wraps every visual LINE in
+ * its own block element (one <div>/<p> per line, sometimes per word, for
+ * layout/ad-injection reasons on the source page). If we trust that block
+ * structure, every wrapper renders on its own row -- the "every word on a
+ * new line" bug. But if we throw away ALL formatting to fix that, real
+ * bold sub-headings embedded in the body (e.g. "War fatigue" above a
+ * paragraph) get flattened to plain text too, which loses real structure.
+ *
+ * The fix: walk the clipboard HTML ourselves. Keep only a small allow-list
+ * of inline tags (bold/italic/underline) and treat every block-level tag
+ * as a "line boundary" -- not automatically a new paragraph. We decide
+ * paragraph breaks the same way a person would read it: a blank line in
+ * the source means a new paragraph; a single line break is just line-wrap
+ * noise and gets collapsed into a space. A line that's short and entirely
+ * bold (or a real <h1>-<h6> in the source) is treated as a sub-heading.
+ */
+
+const HEADING_TAGS = new Set(['H1','H2','H3','H4','H5','H6']);
+const BLOCK_TAGS = new Set(['DIV','P','SECTION','ARTICLE','LI','TR','BR', ...HEADING_TAGS]);
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/**
- * Rebuilds clean <p> paragraphs from pasted plain text.
- *
- * Why this exists: copying text from news sites / many web pages puts
- * HTML on the clipboard where the source wraps every visual LINE in its
- * own block element (one <div>/<p>/<span> per line, sometimes even per
- * word, for layout/ad-injection reasons on the source page). If we trust
- * that HTML, every one of those wrapper elements survives sanitization
- * and renders on its own row — that's the "every word on a new line" bug.
- *
- * The fix: ignore clipboard HTML for body text entirely. Use plain text
- * only, and only treat a BLANK line (a real paragraph break) as the
- * start of a new <p>. A single newline is just line-wrap noise from the
- * source and gets collapsed into a space so words don't run together
- * or get split apart.
- */
-function plainTextToParagraphs(text: string): string {
-  const normalized = text
-    .replace(/\r\n/g, '\n')   // normalize Windows line endings
-    .replace(/\u00A0/g, ' '); // non-breaking spaces -> normal spaces
+type Line = { html: string; isBlank: boolean; isHeadingSource: boolean };
 
+function extractLines(root: Node): Line[] {
+  const lines: Line[] = [];
+  let current: string[] = [];
+
+  function flushLine() {
+    const html = current.join('').trim();
+    current = [];
+    lines.push(html === ''
+      ? { html: '', isBlank: true, isHeadingSource: false }
+      : { html, isBlank: false, isHeadingSource: false });
+  }
+
+  function walk(node: Node, inheritBold: boolean) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = (node.textContent || '').replace(/\u00A0/g, ' ');
+      if (text === '') return;
+      const escaped = escapeHtml(text);
+      current.push(inheritBold ? `<b>${escaped}</b>` : escaped);
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+    const el = node as HTMLElement;
+    const tag = el.tagName;
+
+    if (tag === 'SCRIPT' || tag === 'STYLE') return;
+    if (tag === 'BR') { flushLine(); return; }
+
+    const isBoldTag = tag === 'B' || tag === 'STRONG';
+    const isHeadingTag = HEADING_TAGS.has(tag);
+    const boldNow = inheritBold || isBoldTag || isHeadingTag;
+    const isBlock = BLOCK_TAGS.has(tag);
+
+    el.childNodes.forEach(child => walk(child, boldNow));
+
+    if (isBlock) {
+      flushLine();
+      if (isHeadingTag && lines.length > 0) {
+        lines[lines.length - 1].isHeadingSource = true;
+      }
+    }
+  }
+
+  walk(root, false);
+  flushLine();
+
+  // Collapse consecutive blank lines into one
+  return lines.filter((l, i) => {
+    if (!l.isBlank) return true;
+    const prev = lines[i - 1];
+    return !(prev && prev.isBlank);
+  });
+}
+
+// Short + fully-bold (or a real heading tag) reads as a sub-heading.
+// Long bold passages (emphasis within a normal paragraph) stay as <p>.
+function looksLikeHeading(line: Line): boolean {
+  if (line.isBlank) return false;
+  if (line.isHeadingSource) return true;
+
+  const plain = line.html.replace(/<[^>]+>/g, '');
+  if (plain.length === 0 || plain.length > 80) return false;
+
+  return /^<b>.*<\/b>$/.test(line.html.trim());
+}
+
+function buildParagraphs(lines: Line[]): string {
+  const out: string[] = [];
+  let buffer: string[] = [];
+
+  function flushBuffer() {
+    if (buffer.length === 0) return;
+    const joined = buffer.join(' ').replace(/\s+/g, ' ').trim();
+    if (joined) out.push(`<p>${joined}</p>`);
+    buffer = [];
+  }
+
+  for (const line of lines) {
+    if (line.isBlank) { flushBuffer(); continue; }
+    if (looksLikeHeading(line)) {
+      flushBuffer();
+      const plain = line.html.replace(/<\/?b>/g, '').replace(/<\/?strong>/g, '');
+      out.push(`<h3>${plain}</h3>`);
+      continue;
+    }
+    buffer.push(line.html);
+  }
+  flushBuffer();
+  return out.join('');
+}
+
+function cleanPastedHtml(html: string): string {
+  const parsed = new DOMParser().parseFromString(html, 'text/html');
+  const lines = extractLines(parsed.body);
+  return buildParagraphs(lines);
+}
+
+// Plain-text fallback (e.g. pasting from a source with no HTML at all,
+// like a plain .txt file or terminal) -- same blank-line paragraph rule,
+// just with no formatting to preserve.
+function plainTextToParagraphs(text: string): string {
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ');
   const chunks = normalized
-    .split(/\n\s*\n+/)                       // real paragraph break = blank line
+    .split(/\n\s*\n+/)
     .map(p => p.replace(/\n+/g, ' ').replace(/[ \t]+/g, ' ').trim())
     .filter(Boolean);
-
   return chunks.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 }
 
@@ -82,15 +181,14 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   };
 
-  // Key fix: always paste as plain text, rebuilt into clean paragraphs.
-  // We deliberately do NOT use clipboardData's text/html for body content
-  // — that's the channel that was injecting one wrapper element per
-  // source line and making every line (or word) render on its own row.
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
 
+    const html = e.clipboardData.getData('text/html');
     const plain = e.clipboardData.getData('text/plain');
-    const clean = sanitizeHtml(plainTextToParagraphs(plain));
+
+    const rebuilt = html ? cleanPastedHtml(html) : plainTextToParagraphs(plain);
+    const clean = sanitizeHtml(rebuilt);
 
     document.execCommand('insertHTML', false, clean);
     if (editorRef.current) {
