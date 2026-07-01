@@ -1,18 +1,21 @@
 
+
 import { useState, useRef } from 'react';
 import { RichTextEditor } from './RichTextEditor';
 
 export type Block =
   | { id: string; type: 'text'; value: string }
   | { id: string; type: 'image'; url?: string; cloudinaryId?: string; file?: File; preview?: string }
-  | { id: string; type: 'video'; videoUrl: string };
+  | { id: string; type: 'video'; videoUrl: string }
+  | { id: string; type: 'readmore'; url: string; label?: string };
 
 let _id = 0;
 const uid = () => `blk_${++_id}_${Date.now()}`;
 
-function mkText():  Block { return { id: uid(), type: 'text',  value: '' }; }
-function mkImage(): Block { return { id: uid(), type: 'image' }; }
-function mkVideo(): Block { return { id: uid(), type: 'video', videoUrl: '' }; }
+function mkText():     Block { return { id: uid(), type: 'text',     value: '' }; }
+function mkImage():    Block { return { id: uid(), type: 'image' }; }
+function mkVideo():    Block { return { id: uid(), type: 'video',    videoUrl: '' }; }
+function mkReadMore(): Block { return { id: uid(), type: 'readmore', url: '', label: 'Read More' }; }
 
 /* ─── YouTube / generic video ID extractor ── */
 function extractVideoId(url: string): string | null {
@@ -22,6 +25,10 @@ function extractVideoId(url: string): string | null {
     if (u.hostname === 'youtu.be') return u.pathname.slice(1).split('?')[0];
   } catch {}
   return null;
+}
+
+function isValidUrl(url: string): boolean {
+  try { new URL(url); return true; } catch { return false; }
 }
 
 /* ─── Single image block ── */
@@ -125,8 +132,70 @@ function VideoBlock({ block, onChange, onRemove }: {
   );
 }
 
+/* ─── Single "Read More" button block ── */
+function ReadMoreBlock({ block, onChange, onRemove }: {
+  block: Extract<Block, { type: 'readmore' }>;
+  onChange: (patch: Partial<Extract<Block, { type: 'readmore' }>>) => void;
+  onRemove: () => void;
+}) {
+  const hasUrl   = block.url.trim().length > 0;
+  const urlValid = hasUrl ? isValidUrl(block.url.trim()) : true;
+  const label    = block.label?.trim() ? block.label : 'Read More';
+
+  return (
+    <div className="relative rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">🔗 Read More Button</span>
+        <button onClick={onRemove}
+          className="rounded-lg border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100">
+          Remove
+        </button>
+      </div>
+
+      <label className="mb-1 block text-[11px] font-semibold text-gray-500">Button Text</label>
+      <input
+        value={block.label ?? ''}
+        onChange={e => onChange({ label: e.target.value })}
+        placeholder="Read More"
+        className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+      />
+
+      <label className="mb-1 block text-[11px] font-semibold text-gray-500">Destination Link</label>
+      <input
+        value={block.url}
+        onChange={e => onChange({ url: e.target.value })}
+        placeholder="https://example.com/full-story"
+        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+      />
+
+      {hasUrl && !urlValid && (
+        <p className="mt-2 text-xs text-red-500">
+          ⚠️ That doesn't look like a valid link. Make sure it starts with http:// or https://
+        </p>
+      )}
+
+      {!hasUrl && (
+        <p className="mt-2 text-xs text-gray-400">
+          Paste the link you want opened when a reader taps this button. It always opens in a new tab.
+        </p>
+      )}
+
+      {/* Live preview of the button as it will appear on the article */}
+      <div className="mt-4 flex items-center gap-3 border-t border-emerald-100 pt-3">
+        <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Preview</span>
+        <span className="pointer-events-none relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-red-600 to-red-500 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-red-500/30">
+          {label}
+          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+          </svg>
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Add block button row ── */
-function AddButtons({ onAdd }: { onAdd: (type: 'text' | 'image' | 'video') => void }) {
+function AddButtons({ onAdd }: { onAdd: (type: 'text' | 'image' | 'video' | 'readmore') => void }) {
   const [open, setOpen] = useState(false);
   return (
     <div className="relative flex justify-center py-1">
@@ -137,7 +206,7 @@ function AddButtons({ onAdd }: { onAdd: (type: 'text' | 'image' | 'video') => vo
         +
       </button>
       {open && (
-        <div className="absolute left-1/2 top-8 z-20 flex gap-2 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
+        <div className="absolute left-1/2 top-8 z-20 flex flex-wrap justify-center gap-2 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg" style={{ width: '15rem' }}>
           <button
             onClick={() => { onAdd('text');  setOpen(false); }}
             className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">
@@ -153,6 +222,11 @@ function AddButtons({ onAdd }: { onAdd: (type: 'text' | 'image' | 'video') => vo
             className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100">
             🎬 Video
           </button>
+          <button
+            onClick={() => { onAdd('readmore'); setOpen(false); }}
+            className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100">
+            🔗 Read More
+          </button>
         </div>
       )}
     </div>
@@ -166,13 +240,14 @@ export function BlockEditor({ value, onChange }: {
 }) {
   const update = (fn: (b: Block[]) => Block[]) => onChange(fn(value));
 
-  const insert = (index: number, type: 'text' | 'image' | 'video') => {
+  const insert = (index: number, type: 'text' | 'image' | 'video' | 'readmore') => {
     update(b => {
       const copy = [...b];
       copy.splice(index, 0,
-        type === 'text'  ? mkText()  :
-        type === 'image' ? mkImage() :
-                           mkVideo()
+        type === 'text'     ? mkText()     :
+        type === 'image'    ? mkImage()    :
+        type === 'video'    ? mkVideo()    :
+                               mkReadMore()
       );
       return copy;
     });
@@ -201,8 +276,14 @@ export function BlockEditor({ value, onChange }: {
   const setVideoUrl = (id: string, videoUrl: string) =>
     update(b => b.map(bl => bl.id === id ? { ...bl, videoUrl }      as Block : bl));
 
+  const setReadMore = (id: string, patch: Partial<Extract<Block, { type: 'readmore' }>>) =>
+    update(b => b.map(bl => bl.id === id ? { ...bl, ...patch }      as Block : bl));
+
   const blockTypeLabel = (b: Block) =>
-    b.type === 'text' ? '📝 Text' : b.type === 'image' ? '📷 Image' : '🎬 Video';
+    b.type === 'text' ? '📝 Text' :
+    b.type === 'image' ? '📷 Image' :
+    b.type === 'video' ? '🎬 Video' :
+    '🔗 Read More';
 
   return (
     <div className="space-y-1">
@@ -247,6 +328,13 @@ export function BlockEditor({ value, onChange }: {
                   onRemove={() => remove(block.id)}
                 />
               )}
+              {block.type === 'readmore' && (
+                <ReadMoreBlock
+                  block={block as Extract<Block, { type: 'readmore' }>}
+                  onChange={patch => setReadMore(block.id, patch)}
+                  onRemove={() => remove(block.id)}
+                />
+              )}
             </div>
           </div>
 
@@ -257,7 +345,7 @@ export function BlockEditor({ value, onChange }: {
       {value.length === 0 && (
         <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center text-gray-400">
           <p className="text-sm font-semibold">No content blocks yet.</p>
-          <p className="mt-1 text-xs">Click the + button above to add your first text or image block.</p>
+          <p className="mt-1 text-xs">Click the + button above to add your first text, image, video, or Read More block.</p>
         </div>
       )}
     </div>
@@ -280,6 +368,10 @@ export function serializeBlocks(blocks: Block[]): {
     if (b.type === 'video') {
       // Just store the URL string — no file upload needed
       return { type: 'video', videoUrl: b.videoUrl };
+    }
+
+    if (b.type === 'readmore') {
+      return { type: 'readmore', url: b.url, label: b.label?.trim() ? b.label : 'Read More' };
     }
 
     // image
@@ -307,6 +399,9 @@ export function deserializeBlocks(raw: any[]): Block[] {
     }
     if (b.type === 'video') {
       return { id: uid(), type: 'video' as const, videoUrl: b.videoUrl || '' };
+    }
+    if (b.type === 'readmore') {
+      return { id: uid(), type: 'readmore' as const, url: b.url || '', label: b.label || 'Read More' };
     }
     // default: image
     return {
