@@ -1,4 +1,5 @@
 
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -69,7 +70,49 @@ function extractVideoId(url: string): string | null {
   return null;
 }
 
-function ArticleBlock({ block }: { block: { type: string; value?: string; url?: string; videoUrl?: string } }) {
+/* ── Animated "Read More" CTA button block ──
+   Renders a pill-shaped button that:
+   - glows/pulses continuously (subtle, not distracting)
+   - sweeps a light shimmer across on hover
+   - lifts slightly on hover
+   - always opens the destination link in a new tab
+*/
+function ReadMoreButtonBlock({ url, label }: { url: string; label?: string }) {
+  let safeUrl = url.trim();
+  // Guard against javascript: or other unsafe schemes — only allow http/https/mailto/tel
+  const allowed = /^(https?:)?\/\//i.test(safeUrl) || /^(mailto:|tel:)/i.test(safeUrl);
+  if (!allowed) {
+    // If someone pasted a bare domain like "example.com", assume https
+    safeUrl = `https://${safeUrl.replace(/^\/*/, '')}`;
+  }
+
+  return (
+    <div className="my-8 flex justify-center sm:justify-start">
+      <a
+        href={safeUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group relative inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-red-500/30 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl hover:shadow-red-500/50 active:translate-y-0"
+      >
+        {/* soft continuous glow behind the button */}
+        <span className="absolute -inset-1 -z-10 animate-pulse rounded-full bg-gradient-to-r from-red-600 to-red-500 opacity-40 blur-md" />
+
+        {/* shimmer sweep on hover */}
+        <span className="pointer-events-none absolute inset-0 -translate-x-full overflow-hidden rounded-full bg-gradient-to-r from-transparent via-white/30 to-transparent transition-transform duration-700 ease-out group-hover:translate-x-full" />
+
+        <span className="relative">{label?.trim() ? label : 'Read More'}</span>
+        <svg
+          className="relative h-4 w-4 transition-transform duration-300 group-hover:translate-x-1"
+          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+        </svg>
+      </a>
+    </div>
+  );
+}
+
+function ArticleBlock({ block }: { block: { type: string; value?: string; url?: string; videoUrl?: string; label?: string } }) {
   if (block.type === 'image' && block.url) {
     return (
       <figure className="my-8 w-full">
@@ -103,6 +146,10 @@ function ArticleBlock({ block }: { block: { type: string; value?: string; url?: 
         <video src={block.videoUrl} controls className="w-full rounded-2xl" />
       </div>
     );
+  }
+
+  if (block.type === 'readmore' && block.url) {
+    return <ReadMoreButtonBlock url={block.url} label={block.label} />;
   }
 
   if (block.type === 'text' && block.value) {
