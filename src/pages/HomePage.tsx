@@ -1,5 +1,4 @@
 
-
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -29,13 +28,6 @@ function toArticle(a: any): Article {
   } as Article;
 }
 
-async function fetchRegionHome(section: string, limit = 4): Promise<Article[]> {
-  try {
-    const r = await fetch(`${API_URL}/region-articles/home-section/${section}?limit=${limit}`);
-    return r.ok ? (await r.json()).map(toArticle) : [];
-  } catch { return []; }
-}
-
 async function fetchSectionHome(section: string, limit = 4): Promise<any[]> {
   try {
     const r = await fetch(`${API_URL}/section-articles/home/${section}?limit=${limit}`);
@@ -45,29 +37,19 @@ async function fetchSectionHome(section: string, limit = 4): Promise<any[]> {
   } catch { return []; }
 }
 
-async function fetchSectionHomeTarget(target: string): Promise<Article[]> {
-  try {
-    const r = await fetch(`${API_URL}/section-articles/home-target/${target}`);
-    return r.ok ? (await r.json()).map(toArticle) : [];
-  } catch { return []; }
-}
-
 function getYtThumb(videoId: string) {
   return `https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`;
 }
 
 function CenterHeader({
-  eyebrow, title, description, action, titleClassName = '',
+  title, description, action, titleClassName = '',
 }: {
-  eyebrow: string; title: string; description: string;
+  eyebrow?: string; title: string; description: string;
   action?: React.ReactNode; titleClassName?: string;
 }) {
   return (
     <div className="mb-10 text-center">
-      <span className="inline-block rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-primary">
-        {eyebrow}
-      </span>
-      <h2 className={`mt-4 text-3xl font-black text-ink lg:text-4xl ${titleClassName}`}>{title}</h2>
+      <h2 className={`text-3xl font-black text-ink lg:text-4xl ${titleClassName}`}>{title}</h2>
       <p className="mx-auto mt-3 max-w-2xl text-slate-500">{description}</p>
       {action && <div className="mt-5">{action}</div>}
     </div>
@@ -102,7 +84,7 @@ function ArrowCarousel({ items, renderCard }: { items: any[]; renderCard: (item:
   );
 }
 
-/* ─── Tashkent Section — WordPress magazine style, dark green theme ─── */
+/* ─── Tashkent Section ─── */
 function TashkentSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const lead = articles[0];
@@ -125,7 +107,6 @@ function TashkentSection({ articles }: { articles: Article[] }) {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[1.6fr,1fr]">
-          {/* Lead story */}
           <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-[2rem]">
             <div className="aspect-[16/10] overflow-hidden">
               {lead.image
@@ -135,14 +116,12 @@ function TashkentSection({ articles }: { articles: Article[] }) {
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-7">
-              <span className="text-xs font-bold uppercase tracking-widest text-emerald-400">{lead.category}</span>
-              <h3 className="mt-2 text-2xl font-black text-white lg:text-3xl">{lead.title}</h3>
+              <h3 className="text-2xl font-black text-white lg:text-3xl">{lead.title}</h3>
               {lead.subtitle && <p className="mt-2 text-sm text-white/70">{lead.subtitle}</p>}
               <p className="mt-3 text-xs text-white/50">{lead.author} · {lead.date}</p>
             </div>
           </Link>
 
-          {/* Side list — WordPress list-widget style */}
           <div className="flex flex-col divide-y divide-white/10">
             {rest.map((article, i) => (
               <Link key={article.id} to={`/article/${article.id}`}
@@ -151,8 +130,7 @@ function TashkentSection({ articles }: { articles: Article[] }) {
                   {String(i + 2).padStart(2, '0')}
                 </span>
                 <div className="min-w-0 flex-1">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">{article.category}</span>
-                  <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-white group-hover:text-emerald-300 transition">{article.title}</h3>
+                  <h3 className="line-clamp-2 text-sm font-bold leading-snug text-white group-hover:text-emerald-300 transition">{article.title}</h3>
                   <p className="mt-1 text-xs text-slate-500">{article.author} · {article.date}</p>
                 </div>
                 {article.image && (
@@ -174,7 +152,7 @@ function TashkentSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ─── TIIF-2026 Section — magazine expo style, deep blue/gold theme ─── */
+/* ─── TIIF-2026 Section ─── */
 function TiifSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
@@ -193,9 +171,7 @@ function TiifSection({ articles }: { articles: Article[] }) {
           }
         />
 
-        {/* 5-card grid — two large + three small, WordPress-magazine feel */}
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-          {/* Card 1 — large */}
           {articles[0] && (
             <Link to={`/article/${articles[0].id}`}
               className="group relative overflow-hidden rounded-[1.75rem] md:col-span-2 xl:col-span-1 xl:row-span-2">
@@ -207,15 +183,13 @@ function TiifSection({ articles }: { articles: Article[] }) {
               </div>
               <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
               <div className="absolute inset-x-0 bottom-0 p-6">
-                <span className="inline-block rounded-full bg-amber-400/20 px-3 py-0.5 text-xs font-bold text-amber-300">TIIF-2026</span>
-                <h3 className="mt-2 text-xl font-black text-white">{articles[0].title}</h3>
+                <h3 className="text-xl font-black text-white">{articles[0].title}</h3>
                 {articles[0].subtitle && <p className="mt-1.5 text-sm text-white/70 line-clamp-2">{articles[0].subtitle}</p>}
                 <p className="mt-3 text-xs text-white/50">{articles[0].author} · {articles[0].date}</p>
               </div>
             </Link>
           )}
 
-          {/* Cards 2–5 — smaller */}
           {articles.slice(1, 5).map((article) => (
             <Link key={article.id} to={`/article/${article.id}`}
               className="group flex gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-sm transition hover:-translate-y-0.5 hover:bg-white/10">
@@ -225,12 +199,71 @@ function TiifSection({ articles }: { articles: Article[] }) {
                 </div>
               )}
               <div className="min-w-0 flex-1">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">{article.category}</span>
-                <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-white">{article.title}</h3>
+                <h3 className="line-clamp-2 text-sm font-bold leading-snug text-white">{article.title}</h3>
                 <p className="mt-1.5 text-xs text-slate-500">{article.author} · {article.date}</p>
               </div>
             </Link>
           ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/* ─── Aviation Section — new, sky/aircraft theme, distinct from Tashkent/TIIF ─── */
+function AviationSection({ articles }: { articles: Article[] }) {
+  if (!articles.length) return null;
+  const [main, ...rest] = articles;
+  return (
+    <section className="bg-gradient-to-b from-sky-50 via-white to-white py-16">
+      <div className="mx-auto max-w-7xl px-4 lg:px-6">
+        <div className="mb-10 flex items-end justify-between">
+          <div>
+            <span className="inline-flex items-center gap-2 rounded-full border border-sky-300 bg-sky-100 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-sky-700">
+              ✈️ Aviation
+            </span>
+            <h2 className="mt-3 text-4xl font-black text-ink lg:text-5xl">Aviation</h2>
+            <p className="mt-2 max-w-xl text-slate-500">Airlines, airports, aerospace and industry developments.</p>
+          </div>
+          <Link to="/section/aviation"
+            className="hidden shrink-0 rounded-full border border-sky-300 px-5 py-2.5 text-sm font-semibold text-sky-700 transition hover:bg-sky-100 sm:block">
+            All Coverage →
+          </Link>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
+          <Link to={`/article/${main.id}`}
+            className="group relative overflow-hidden rounded-[2rem] border border-sky-100 shadow-[0_20px_50px_rgba(14,165,233,0.12)]">
+            <div className="aspect-[16/10] overflow-hidden">
+              {main.image
+                ? <img src={main.image} alt={main.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                : <div className="h-full w-full bg-sky-200" />
+              }
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 p-7">
+              <h3 className="text-2xl font-black text-white lg:text-3xl">{main.title}</h3>
+              {main.subtitle && <p className="mt-2 text-sm text-white/80">{main.subtitle}</p>}
+              <p className="mt-3 text-xs text-white/60">{main.author} · {main.date}</p>
+            </div>
+          </Link>
+
+          <div className="flex flex-col gap-4">
+            {rest.slice(0, 4).map((article) => (
+              <Link key={article.id} to={`/article/${article.id}`}
+                className="group flex gap-4 overflow-hidden rounded-2xl border border-sky-100 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+                {article.image && (
+                  <div className="h-20 w-24 flex-shrink-0 overflow-hidden rounded-xl">
+                    <img src={article.image} alt={article.title} className="h-full w-full object-cover transition group-hover:scale-105" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <h3 className="line-clamp-2 text-sm font-bold text-ink">{article.title}</h3>
+                  <p className="mt-1 text-xs text-slate-400">{article.author} · {article.date}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -257,22 +290,25 @@ export function HomePage() {
   const [diplomaticCorner, setDiplomaticCorner] = useState<Article[]>([]);
   const [tashkent,         setTashkent]         = useState<Article[]>([]);
   const [tiif,             setTiif]             = useState<Article[]>([]);
+  const [aviation,         setAviation]         = useState<Article[]>([]);
+  const [homeLoaded, setHomeLoaded] = useState(false);
 
   useEffect(() => {
     Promise.all([
-      Promise.all([fetchRegionHome('uk'), fetchSectionHomeTarget('uk')]).then(([r, s]) => [...r, ...s].slice(0, 4)),
-      Promise.all([fetchRegionHome('editors-picks'), fetchSectionHomeTarget('editors-picks')]).then(([r, s]) => [...r, ...s].slice(0, 4)),
-      Promise.all([fetchRegionHome('in-focus'), fetchSectionHomeTarget('in-focus')]).then(([r, s]) => [...r, ...s].slice(0, 4)),
+      fetchSectionHome('uk', 4),
+      fetchSectionHome('editors-picks', 4),
+      fetchSectionHome('in-focus', 4),
       fetchSectionHome('interviews'),
       fetchSectionHome('video', 4),
       fetchSectionHome('opinion'),
-      fetchRegionHome('central-asia', 8),
-      fetchRegionHome('europe-home', 4),
-      fetchRegionHome('russia-home', 5),
+      fetchSectionHome('central-asia', 8),
+      fetchSectionHome('europe-home', 4),
+      fetchSectionHome('russia-home', 5),
       fetchSectionHome('diplomatic-corner', 8),
       fetchSectionHome('tashkent', 5),
       fetchSectionHome('tiif-2026', 5),
-    ]).then(([uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, tiif2026]) => {
+      fetchSectionHome('aviation', 5),
+    ]).then(([uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, tiif2026, avi]) => {
       if (uk.length)       setUkArticles(uk);
       if (ep.length)       setEdPick(ep);
       if (inf.length)      setInFocus(inf);
@@ -285,13 +321,15 @@ export function HomePage() {
       if (dc.length)       setDiplomaticCorner(dc);
       if (tash.length)     setTashkent(tash);
       if (tiif2026.length) setTiif(tiif2026);
+      if (avi.length)      setAviation(avi);
+      setHomeLoaded(true);
     });
   }, []);
 
-  const displayUK      = ukArticles.length      ? ukArticles      : staticUK;
-  const displayEdPick  = edPick.length           ? edPick          : staticEdPick;
-  const displayInFocus = inFocus.length          ? inFocus         : staticFocus;
-  const displayIntvw   = interviews.length       ? interviews      : staticIntvw;
+  const displayUK      = !homeLoaded ? [] : (ukArticles.length ? ukArticles : staticUK);
+  const displayEdPick  = !homeLoaded ? [] : (edPick.length     ? edPick     : staticEdPick);
+  const displayInFocus = !homeLoaded ? [] : (inFocus.length    ? inFocus    : staticFocus);
+  const displayIntvw   = !homeLoaded ? [] : (interviews.length ? interviews : staticIntvw);
   const displayVideos  = videoArticles;
   const displayOpinion = opinionArticles;
   const displayCA      = centralAsia;
@@ -300,6 +338,7 @@ export function HomePage() {
   const displayDiplo   = diplomaticCorner;
   const displayTashkent = tashkent;
   const displayTiif    = tiif;
+  const displayAviation = aviation;
 
   const featuredEditorsPick = displayEdPick[0] || null;
   const sideEditorsPicks    = displayEdPick.slice(1, 4);
@@ -326,7 +365,6 @@ export function HomePage() {
                   <img src={article.image} alt={article.title}
                     className="h-64 w-full object-cover transition duration-500 group-hover:scale-105" />
                   <div className="p-6">
-                    <div className="text-xs font-bold uppercase tracking-[0.35em] text-accent">{article.topic || article.category || 'UK Coverage'}</div>
                     <h3 className="mt-3 text-2xl font-bold text-ink">{article.title}</h3>
                     <p className="mt-2 text-slate-600">{article.subtitle}</p>
                     <span className="mt-5 inline-block rounded-full border border-primary px-5 py-2.5 font-semibold text-primary transition group-hover:bg-primary group-hover:text-white">Read More</span>
@@ -353,8 +391,7 @@ export function HomePage() {
                     <img src={article.image} alt={article.title} className="h-28 w-32 flex-shrink-0 rounded-xl object-cover" />
                     <div className="flex min-w-0 flex-col justify-between py-0.5">
                       <div>
-                        <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-accent">{article.category}</div>
-                        <h3 className="mt-1.5 line-clamp-2 text-base font-bold leading-snug text-ink">{article.title}</h3>
+                        <h3 className="line-clamp-2 text-base font-bold leading-snug text-ink">{article.title}</h3>
                         <p className="mt-1.5 text-xs text-slate-400">{article.author} · {article.date}</p>
                       </div>
                       <span className="mt-2 self-start text-sm font-semibold text-primary group-hover:underline">Read More →</span>
@@ -397,8 +434,7 @@ export function HomePage() {
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-5">
-                    <span className="inline-block rounded-full bg-accent/20 px-2.5 py-0.5 text-xs font-semibold text-accent">Interview</span>
-                    <h3 className="mt-2 line-clamp-3 text-sm font-bold leading-snug text-white">{article.title}</h3>
+                    <h3 className="line-clamp-3 text-sm font-bold leading-snug text-white">{article.title}</h3>
                     <p className="mt-2 text-xs text-white/50">{article.author} · {article.date}</p>
                   </div>
                 </Link>
@@ -434,8 +470,7 @@ export function HomePage() {
                       </div>
                     </div>
                     <div className="p-4">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-red-400">{article.category}</span>
-                      <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
+                      <h3 className="line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
                       <p className="mt-1 text-xs text-slate-400">{article.author} · {article.date}</p>
                     </div>
                   </Link>
@@ -466,8 +501,7 @@ export function HomePage() {
                     <svg className="h-6 w-6 text-accent/40" fill="currentColor" viewBox="0 0 24 24">
                       <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z" />
                     </svg>
-                    <span className="mt-2 text-[10px] font-bold uppercase tracking-widest text-accent">{article.category}</span>
-                    <h3 className="mt-1.5 line-clamp-3 flex-1 text-base font-bold leading-snug text-ink">{article.title}</h3>
+                    <h3 className="mt-2 line-clamp-3 flex-1 text-base font-bold leading-snug text-ink">{article.title}</h3>
                     <div className="mt-4 flex items-center gap-2 border-t border-amber-100 pt-3">
                       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary text-xs font-bold text-white">
                         {article.author?.charAt(0) || 'A'}
@@ -500,8 +534,7 @@ export function HomePage() {
                   </div>
                 )}
                 <div className="p-5">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-accent">{article.category}</span>
-                  <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
+                  <h3 className="line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
                   <p className="mt-1 text-xs text-slate-400">{article.author} · {article.date}</p>
                 </div>
               </Link>
@@ -527,8 +560,7 @@ export function HomePage() {
                   </div>
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                   <div className="absolute bottom-0 left-0 right-0 p-7">
-                    <span className="text-xs font-bold uppercase tracking-widest text-accent">{displayEurope[0].category}</span>
-                    <h3 className="mt-2 text-2xl font-black text-white lg:text-3xl">{displayEurope[0].title}</h3>
+                    <h3 className="text-2xl font-black text-white lg:text-3xl">{displayEurope[0].title}</h3>
                     <p className="mt-2 text-sm text-white/70">{displayEurope[0].author} · {displayEurope[0].date}</p>
                   </div>
                 </Link>
@@ -538,8 +570,7 @@ export function HomePage() {
                       className="group flex gap-4 overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 transition hover:-translate-y-0.5 hover:shadow-soft">
                       {article.image && <img src={article.image} alt={article.title} className="h-20 w-24 flex-shrink-0 rounded-xl object-cover" />}
                       <div className="min-w-0 flex-1">
-                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent">{article.category}</span>
-                        <h3 className="mt-1 line-clamp-2 text-sm font-bold text-ink">{article.title}</h3>
+                        <h3 className="line-clamp-2 text-sm font-bold text-ink">{article.title}</h3>
                         <p className="mt-1 text-xs text-slate-400">{article.author} · {article.date}</p>
                       </div>
                     </Link>
@@ -580,7 +611,6 @@ export function HomePage() {
                       className="group block border-b border-slate-300 pb-8 last:border-b-0 last:pb-0">
                       <div className="grid grid-cols-[1fr,120px] gap-5 items-start">
                         <div>
-                          <div className="text-sm font-black uppercase tracking-wide text-accent">{article.category || 'Russia'}</div>
                           <h3 className="mt-2 text-[2rem] font-semibold leading-[1.05] text-ink group-hover:text-primary transition">{article.title}</h3>
                         </div>
                         {article.image && <img src={article.image} alt={article.title} className="h-20 w-full object-cover" />}
@@ -600,6 +630,9 @@ export function HomePage() {
       {/* ── TIIF-2026 ── */}
       <TiifSection articles={displayTiif} />
 
+      {/* ── Aviation ── */}
+      <AviationSection articles={displayAviation} />
+
       {displayDiplo.length > 0 && (
         <section className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-16">
           <div className="mx-auto max-w-7xl px-4 lg:px-6">
@@ -615,8 +648,7 @@ export function HomePage() {
                   </div>
                 )}
                 <div className="p-5">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-amber-400">{article.category}</span>
-                  <h3 className="mt-1.5 line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
+                  <h3 className="line-clamp-2 text-sm font-bold text-white">{article.title}</h3>
                   <p className="mt-1 text-xs text-slate-400">{article.author} · {article.date}</p>
                 </div>
               </Link>
