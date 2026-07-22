@@ -22,17 +22,20 @@ export type NavCategory = {
 const paragraph = `London Post delivers sharp reporting, policy-focused analysis and long-form regional coverage for readers who want context, clarity and credibility. This placeholder article is intentionally long so you can test summary previews, read-more interactions and the bottom reading section without navigating away from the page. The structure is designed for your future API or CMS integration, whether you keep WordPress at the backend or move fully into your own MERN-based stack.`;
 
 const detailed = `${paragraph}\n\nEditors can later swap this text for real article bodies, embedded media, pull quotes or newsletter sign-up components. The frontend keeps the experience smooth by loading the selected article inside the same page, then scrolling to a dedicated reading area. That gives you the editorial feel of a modern research magazine while preserving a fast category browsing experience for high-volume content pages.\n\nThis demo also supports featured stories, latest updates and archived articles. You can extend the dummy data model with slugs, SEO fields, tags, sponsorship metadata, podcasts, live video IDs and membership restrictions when connecting your backend.`;
+
+function slugifyNav(s: string) {
+  return s.toLowerCase()
+    .replace(/'/g, '')                 // strip apostrophes first, don't hyphenate them
+    .replace(/&/g, 'and')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '');
+}
+// In `moreMenu`, add these three so they appear in the "More" dropdown:
+// In moreMenu, add 'Aviation':
 export const moreMenu = [
-  'Sports',
-  'Interviews',
-  'Art & Culture',
-  'Hidden Histories',
-  'Youth Voices',
-  'Economy',
-  'Defence',
-  'Video',
-  'Opinion',
-  'Diplomatic Corner',
+  'Sports', 'Interviews', 'Art & Culture', 'Hidden Histories', 'Youth Voices',
+  'Economy', 'Defence', 'Video', 'Opinion', 'Diplomatic Corner',
+  'United Kingdom', "Editor's Picks", 'In Focus', 'Aviation',
 ];
 export const regionMenus: Record<string, string[]> = {
   asia:       ['East Asia', 'South Asia', 'Southeast Asia', 'Central Asia'],
@@ -57,7 +60,8 @@ export const navigation: NavCategory[] = [
     ],
   },
   { name: 'Contact Us', slug: '/contact' },
-  { name: 'World', slug: '/regions' },
+  { name: 'World', slug: '/section/world' },
+{ name: 'Region', slug: '/regions' },
   { name: 'Live Podcast', slug: '/live' },
   { name: 'Mission & Vision', slug: '/mission-vision' },
   { name: 'Asia', slug: '/region/asia' },
@@ -67,13 +71,12 @@ export const navigation: NavCategory[] = [
   {
     name: 'More',
     slug: '/more',
-    children: [
-      ...moreMenu.map((item) => ({
-        name: item,
-        slug: `/section/${item.toLowerCase().replace(/\s+/g, '-')}`,
-      })),
-   
-    ],
+ children: [
+  ...moreMenu.map((item) => ({
+    name: item,
+    slug: `/section/${slugifyNav(item)}`,
+  })),
+],
   },
   { name: 'Membership', slug: '/membership' },
 ];
