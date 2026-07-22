@@ -1,5 +1,4 @@
 
-
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -8,6 +7,7 @@ import { SectionHeading } from '../components/SectionHeading';
 import { PaginatedArticles } from '../components/PaginatedArticles';
 import { Article, articles as staticArticles, regionMenus } from '../data/siteData';
 import { slugify } from '../utils/helpers';
+import { bucketArticles } from '../utils/articleBuckets';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -39,8 +39,6 @@ function apiToArticle(a: any): Article {
     featured: a.isFeatured || false,
     archived: a.isArchived || false,
     topic:    a.category || '',
-
-    // keep hashtags for reader/detail usage
     ...(Array.isArray(a.hashtags) ? { hashtags: a.hashtags } : {}),
   } as Article;
 }
@@ -56,8 +54,8 @@ export function RegionPage() {
   const [apiLoaded, setApiLoaded] = useState(false);
   const [filteredArchived, setFilteredArchived] = useState<Article[]>([]);
 
-  const [featuredVisible, setFeaturedVisible] = useState(FEATURED_BATCH);
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
+  const [featuredVisible, setFeaturedVisible] = useState(FEATURED_BATCH);
   const [archivedVisible, setArchivedVisible] = useState(GRID_BATCH);
 
   useEffect(() => {
@@ -76,8 +74,8 @@ export function RegionPage() {
   }, [area, selectedCategory]);
 
   useEffect(() => {
-    setFeaturedVisible(FEATURED_BATCH);
     setLatestVisible(GRID_BATCH);
+    setFeaturedVisible(FEATURED_BATCH);
     setArchivedVisible(GRID_BATCH);
   }, [area, selectedCategory]);
 
@@ -85,7 +83,6 @@ export function RegionPage() {
     if (selectedCategory) {
       return staticArticles.filter((a) => a.region.toLowerCase() === selectedCategory.toLowerCase());
     }
-
     return staticArticles.filter((a) =>
       a.region.toLowerCase() === meta.label.toLowerCase() ||
       a.region.toLowerCase() === area.toLowerCase() ||
@@ -95,23 +92,31 @@ export function RegionPage() {
 
   const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : staticMatch;
 
-  const featuredAll = sourceArticles.filter((a) => a.featured && !a.archived);
-  const latestAll = sourceArticles.filter((a) => !a.archived);
-  const archivedAll = sourceArticles.filter((a) => a.archived);
+  // Date-driven buckets — see utils/articleBuckets.ts for the rules.
+  // Recomputed only when the underlying article list actually changes,
+  // so it can safely sit in effect dependency arrays below without
+  // causing render-loop resets (the bug that broke "Load More" on the
+  // Section page).
+  const { latest: latestAll, featured: featuredAll, archived: archivedAll } = useMemo(
+    () => bucketArticles(sourceArticles),
+    [sourceArticles]
+  );
 
+  useEffect(() => {
+    setFilteredArchived(archivedAll);
+    setArchivedVisible(GRID_BATCH);
+    // Intentionally scoped to navigation/data-load changes, not archivedAll
+    // itself, so clicking "Load More" never gets reset by this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [area, selectedCategory, apiLoaded]);
+
+  const visibleLatest   = latestAll.slice(0, latestVisible);
   const visibleFeatured = featuredAll.slice(0, featuredVisible);
-  const visibleLatest = latestAll.slice(0, latestVisible);
   const visibleArchived = filteredArchived.slice(0, archivedVisible);
 
+  const canLoadMoreLatest   = latestVisible < latestAll.length;
   const canLoadMoreFeatured = featuredVisible < featuredAll.length;
-  const canLoadMoreLatest = latestVisible < latestAll.length;
   const canLoadMoreArchived = archivedVisible < filteredArchived.length;
-
- useEffect(() => {
-  setFilteredArchived(archivedAll);
-  setArchivedVisible(GRID_BATCH);
- 
-}, [area, selectedCategory, apiLoaded]);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
@@ -166,15 +171,15 @@ export function RegionPage() {
 
       <div className="mt-8 grid gap-8 xl:grid-cols-[1fr,300px]">
         <div>
-          {featuredAll.length > 0 && (
+          {latestAll.length > 0 && (
             <div>
-              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Featured</p>
-              <PaginatedArticles articles={visibleFeatured} />
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Latest</p>
+              <PaginatedArticles articles={visibleLatest} />
 
-              {canLoadMoreFeatured && (
+              {canLoadMoreLatest && (
                 <div className="mt-6 flex justify-center">
                   <button
-                    onClick={() => setFeaturedVisible((v) => v + FEATURED_BATCH)}
+                    onClick={() => setLatestVisible((v) => v + GRID_BATCH)}
                     className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Load More
@@ -184,15 +189,15 @@ export function RegionPage() {
             </div>
           )}
 
-          {latestAll.length > 0 && (
+          {featuredAll.length > 0 && (
             <div className="mt-10">
-              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Latest</p>
-              <PaginatedArticles articles={visibleLatest} />
+              <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Featured — {new Date().getFullYear()}</p>
+              <PaginatedArticles articles={visibleFeatured} />
 
-              {canLoadMoreLatest && (
+              {canLoadMoreFeatured && (
                 <div className="mt-6 flex justify-center">
                   <button
-                    onClick={() => setLatestVisible((v) => v + GRID_BATCH)}
+                    onClick={() => setFeaturedVisible((v) => v + FEATURED_BATCH)}
                     className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                   >
                     Load More
@@ -233,12 +238,12 @@ export function RegionPage() {
               <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
                 {archivedAll.length > 0
                   ? 'No archived articles match the selected filter.'
-                  : 'Archived stories will appear here once added.'}
+                  : 'Articles from previous years will appear here automatically.'}
               </p>
             )}
           </div>
 
-          {featuredAll.length === 0 && latestAll.length === 0 && (
+          {latestAll.length === 0 && featuredAll.length === 0 && (
             <div className="rounded-[2rem] border-2 border-dashed border-slate-200 p-16 text-center text-slate-400">
               <p className="text-lg font-semibold">No articles yet for this region</p>
               <p className="mt-2 text-sm">Add from Admin → World / Regions → {meta.label}</p>
