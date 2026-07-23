@@ -1,6 +1,5 @@
 
-
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { RichTextEditor } from './RichTextEditor';
 
 export type Block =
@@ -31,41 +30,48 @@ function isValidUrl(url: string): boolean {
   try { new URL(url); return true; } catch { return false; }
 }
 
-/* ─── Single image block ── */
-function ImageBlock({ block, onFile, onRemove }: {
+/* ─── Small hover toolbar shared by every non-text embed ── */
+function EmbedToolbar({ onUp, onDown, onRemove, canUp, canDown }: {
+  onUp: () => void; onDown: () => void; onRemove: () => void; canUp: boolean; canDown: boolean;
+}) {
+  return (
+    <div className="absolute right-2 top-2 z-10 flex items-center gap-0.5 rounded-lg border border-gray-200 bg-white/95 p-0.5 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100">
+      <button onClick={onUp} disabled={!canUp}
+        className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-100 disabled:opacity-30">↑</button>
+      <button onClick={onDown} disabled={!canDown}
+        className="rounded px-1.5 py-1 text-xs text-gray-400 hover:bg-gray-100 disabled:opacity-30">↓</button>
+      <button onClick={onRemove}
+        className="rounded px-1.5 py-1 text-xs text-red-400 hover:bg-red-50">✕</button>
+    </div>
+  );
+}
+
+/* ─── Inline image embed ── */
+function ImageEmbed({ block, onFile, onRemove, onUp, onDown, canUp, canDown }: {
   block: Extract<Block, { type: 'image' }>;
   onFile: (file: File, preview: string) => void;
-  onRemove: () => void;
+  onRemove: () => void; onUp: () => void; onDown: () => void; canUp: boolean; canDown: boolean;
 }) {
   const inp = useRef<HTMLInputElement>(null);
   const src = block.preview || block.url || '';
 
   return (
-    <div className="relative rounded-xl border-2 border-dashed border-blue-200 bg-blue-50/30 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-blue-500">📷 Image Block</span>
-        <button onClick={onRemove} className="rounded-lg border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100">Remove</button>
-      </div>
-
+    <div className="group relative my-3 rounded-lg border border-gray-100 bg-gray-50/50 p-2">
+      <EmbedToolbar onUp={onUp} onDown={onDown} onRemove={onRemove} canUp={canUp} canDown={canDown} />
       {src ? (
-        <div className="relative group mb-2">
-          <img src={src} alt="" className="w-full rounded-lg object-contain" style={{ maxHeight: '600px' }} />
+        <div className="relative">
+          <img src={src} alt="" className="mx-auto max-h-[420px] rounded-md object-contain" />
           <button onClick={() => inp.current?.click()}
-            className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition">
+            className="absolute bottom-2 right-2 rounded-lg bg-black/60 px-2 py-1 text-[10px] font-bold text-white opacity-0 hover:opacity-100 transition">
             Change
           </button>
         </div>
       ) : (
         <button onClick={() => inp.current?.click()}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-blue-200 bg-white py-8 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition">
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          Click to select image
+          className="flex w-full items-center justify-center gap-2 rounded-md border border-dashed border-blue-200 bg-white py-6 text-sm font-semibold text-blue-600 hover:bg-blue-50 transition">
+          📷 Click to add image
         </button>
       )}
-
       <input ref={inp} type="file" accept="image/*" className="hidden"
         onChange={e => {
           const f = e.target.files?.[0];
@@ -77,115 +83,85 @@ function ImageBlock({ block, onFile, onRemove }: {
   );
 }
 
-/* ─── Single video block ── */
-function VideoBlock({ block, onChange, onRemove }: {
+/* ─── Inline video embed ── */
+function VideoEmbed({ block, onChange, onRemove, onUp, onDown, canUp, canDown }: {
   block: Extract<Block, { type: 'video' }>;
   onChange: (videoUrl: string) => void;
-  onRemove: () => void;
+  onRemove: () => void; onUp: () => void; onDown: () => void; canUp: boolean; canDown: boolean;
 }) {
   const videoId = block.videoUrl ? extractVideoId(block.videoUrl) : null;
   const hasUrl  = block.videoUrl.trim().length > 0;
 
   return (
-    <div className="relative rounded-xl border-2 border-dashed border-red-200 bg-red-50/30 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-red-500">🎬 Video Block</span>
-        <button onClick={onRemove}
-          className="rounded-lg border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100">
-          Remove
-        </button>
-      </div>
-
+    <div className="group relative my-3 rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+      <EmbedToolbar onUp={onUp} onDown={onDown} onRemove={onRemove} canUp={canUp} canDown={canDown} />
+      <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-red-400">🎬 Video</div>
       <input
         value={block.videoUrl}
         onChange={e => onChange(e.target.value)}
         placeholder="Paste YouTube URL — e.g. https://www.youtube.com/watch?v=dQw4w9WgXcQ"
         className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-red-400 focus:outline-none focus:ring-1 focus:ring-red-200"
       />
-
-      {/* Live preview */}
       {hasUrl && videoId && (
-        <div className="mt-3 aspect-video w-full overflow-hidden rounded-xl shadow-sm">
+        <div className="mt-2 aspect-video w-full max-w-md overflow-hidden rounded-lg shadow-sm">
           <iframe
             src={`https://www.youtube.com/embed/${videoId}?rel=0&modestbranding=1`}
-            title="Video preview"
-            className="h-full w-full"
+            title="Video preview" className="h-full w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
         </div>
       )}
-
-      {/* Error state — URL entered but no ID parsed */}
       {hasUrl && !videoId && (
-        <p className="mt-2 text-xs text-red-500">
-          ⚠️ Could not detect a YouTube video ID. Make sure the URL is a valid YouTube link.
-        </p>
-      )}
-
-      {!hasUrl && (
-        <p className="mt-2 text-xs text-gray-400">
-          Paste a YouTube URL above and a live preview will appear here.
-        </p>
+        <p className="mt-2 text-xs text-red-500">⚠️ Could not detect a YouTube video ID. Check the URL.</p>
       )}
     </div>
   );
 }
 
-/* ─── Single "Read More" button block ── */
-function ReadMoreBlock({ block, onChange, onRemove }: {
+/* ─── Inline "Read More" embed — label always editable, since not every
+     link is literally a "Read More" ── */
+function ReadMoreEmbed({ block, onChange, onRemove, onUp, onDown, canUp, canDown }: {
   block: Extract<Block, { type: 'readmore' }>;
   onChange: (patch: Partial<Extract<Block, { type: 'readmore' }>>) => void;
-  onRemove: () => void;
+  onRemove: () => void; onUp: () => void; onDown: () => void; canUp: boolean; canDown: boolean;
 }) {
   const hasUrl   = block.url.trim().length > 0;
   const urlValid = hasUrl ? isValidUrl(block.url.trim()) : true;
   const label    = block.label?.trim() ? block.label : 'Read More';
 
   return (
-    <div className="relative rounded-xl border-2 border-dashed border-emerald-200 bg-emerald-50/30 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">🔗 Read More Button</span>
-        <button onClick={onRemove}
-          className="rounded-lg border border-red-100 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-600 hover:bg-red-100">
-          Remove
-        </button>
+    <div className="group relative my-3 rounded-lg border border-gray-100 bg-gray-50/50 p-3">
+      <EmbedToolbar onUp={onUp} onDown={onDown} onRemove={onRemove} canUp={canUp} canDown={canDown} />
+      <div className="mb-2 text-[10px] font-bold uppercase tracking-widest text-emerald-500">🔗 Button Link</div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold text-gray-500">Button Text</label>
+          <input
+            value={block.label ?? ''}
+            onChange={e => onChange({ label: e.target.value })}
+            placeholder="e.g. Watch Now, View Report, Continue Reading"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-[11px] font-semibold text-gray-500">Destination Link</label>
+          <input
+            value={block.url}
+            onChange={e => onChange({ url: e.target.value })}
+            placeholder="https://example.com/full-story"
+            className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
+          />
+        </div>
       </div>
-
-      <label className="mb-1 block text-[11px] font-semibold text-gray-500">Button Text</label>
-      <input
-        value={block.label ?? ''}
-        onChange={e => onChange({ label: e.target.value })}
-        placeholder="Read More"
-        className="mb-3 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
-      />
-
-      <label className="mb-1 block text-[11px] font-semibold text-gray-500">Destination Link</label>
-      <input
-        value={block.url}
-        onChange={e => onChange({ url: e.target.value })}
-        placeholder="https://example.com/full-story"
-        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 placeholder-gray-400 focus:border-emerald-400 focus:outline-none focus:ring-1 focus:ring-emerald-200"
-      />
-
       {hasUrl && !urlValid && (
-        <p className="mt-2 text-xs text-red-500">
-          ⚠️ That doesn't look like a valid link. Make sure it starts with http:// or https://
-        </p>
+        <p className="mt-2 text-xs text-red-500">⚠️ That doesn't look like a valid link (needs http:// or https://).</p>
       )}
-
-      {!hasUrl && (
-        <p className="mt-2 text-xs text-gray-400">
-          Paste the link you want opened when a reader taps this button. It always opens in a new tab.
-        </p>
-      )}
-
-      {/* Live preview of the button as it will appear on the article */}
-      <div className="mt-4 flex items-center gap-3 border-t border-emerald-100 pt-3">
+      <div className="mt-3 flex items-center gap-3">
         <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Preview</span>
-        <span className="pointer-events-none relative inline-flex items-center gap-2 overflow-hidden rounded-full bg-gradient-to-r from-red-600 to-red-500 px-6 py-2.5 text-xs font-bold text-white shadow-md shadow-red-500/30">
+        <span className="pointer-events-none inline-flex items-center gap-2 rounded-full bg-gradient-to-r from-red-600 to-red-500 px-5 py-2 text-xs font-bold text-white shadow-sm">
           {label}
-          <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
           </svg>
         </span>
@@ -194,63 +170,75 @@ function ReadMoreBlock({ block, onChange, onRemove }: {
   );
 }
 
-/* ─── Add block button row ── */
-function AddButtons({ onAdd }: { onAdd: (type: 'text' | 'image' | 'video' | 'readmore') => void }) {
+/* ─── Slim inline insertion point — sits at the active cursor position,
+     invisible until hovered or active, opens a small popover ── */
+function InsertPoint({ isActive, onAdd }: {
+  isActive: boolean;
+  onAdd: (type: 'text' | 'image' | 'video' | 'readmore') => void;
+}) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="relative flex justify-center py-1">
-      <div className="absolute top-1/2 h-px w-full bg-gray-200" />
+    <div className={`group/insert relative flex h-3 items-center justify-center ${isActive ? '' : ''}`}>
+      <div className={`absolute h-px w-full transition ${isActive ? 'bg-indigo-200' : 'bg-transparent group-hover/insert:bg-gray-200'}`} />
       <button
         onClick={() => setOpen(o => !o)}
-        className="relative z-10 flex h-7 w-7 items-center justify-center rounded-full border-2 border-gray-300 bg-white text-gray-400 text-lg leading-none transition hover:border-indigo-400 hover:text-indigo-500">
+        className={`relative z-10 flex h-5 w-5 items-center justify-center rounded-full border text-xs leading-none transition
+          ${isActive
+            ? 'border-indigo-400 bg-indigo-500 text-white opacity-100'
+            : 'border-gray-300 bg-white text-gray-400 opacity-0 hover:border-indigo-400 hover:text-indigo-500 group-hover/insert:opacity-100'}`}
+      >
         +
       </button>
       {open && (
-        <div className="absolute left-1/2 top-8 z-20 flex flex-wrap justify-center gap-2 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-2 shadow-lg" style={{ width: '15rem' }}>
-          <button
-            onClick={() => { onAdd('text');  setOpen(false); }}
-            className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 transition hover:bg-indigo-100">
-            📝 Text
-          </button>
-          <button
-            onClick={() => { onAdd('image'); setOpen(false); }}
-            className="flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 transition hover:bg-blue-100">
-            📷 Image
-          </button>
-          <button
-            onClick={() => { onAdd('video'); setOpen(false); }}
-            className="flex items-center gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-700 transition hover:bg-red-100">
-            🎬 Video
-          </button>
-          <button
-            onClick={() => { onAdd('readmore'); setOpen(false); }}
-            className="flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 transition hover:bg-emerald-100">
-            🔗 Read More
-          </button>
+        <div className="absolute left-1/2 top-6 z-20 flex flex-wrap justify-center gap-1.5 -translate-x-1/2 rounded-xl border border-gray-200 bg-white p-1.5 shadow-lg" style={{ width: '13rem' }}>
+          {[
+            { t: 'text' as const,     label: '📝 Text',      cls: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100' },
+            { t: 'image' as const,    label: '📷 Image',     cls: 'bg-blue-50 text-blue-700 hover:bg-blue-100' },
+            { t: 'video' as const,    label: '🎬 Video',     cls: 'bg-red-50 text-red-700 hover:bg-red-100' },
+            { t: 'readmore' as const, label: '🔗 Link Btn',  cls: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100' },
+          ].map(opt => (
+            <button key={opt.t} onClick={() => { onAdd(opt.t); setOpen(false); }}
+              className={`rounded-lg px-2.5 py-1.5 text-[11px] font-bold transition ${opt.cls}`}>
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
     </div>
   );
 }
 
-/* ─── Main BlockEditor ── */
+/* ─── Main BlockEditor — renders as ONE continuous box.
+     `activeId` tracks whichever block currently has focus/was last clicked;
+     the "+" insertion point at that position is highlighted, and adding a
+     new block drops it right there — "put your cursor anywhere and insert." ── */
 export function BlockEditor({ value, onChange }: {
   value: Block[];
   onChange: (blocks: Block[]) => void;
 }) {
+  const [activeId, setActiveId] = useState<string | null>(value[0]?.id ?? null);
+
+  useEffect(() => {
+    if (value.length && !value.some(b => b.id === activeId)) {
+      setActiveId(value[value.length - 1].id);
+    }
+  }, [value, activeId]);
+
   const update = (fn: (b: Block[]) => Block[]) => onChange(fn(value));
 
-  const insert = (index: number, type: 'text' | 'image' | 'video' | 'readmore') => {
+  const insertAfter = (afterId: string | null, type: 'text' | 'image' | 'video' | 'readmore') => {
+    const newBlock =
+      type === 'text'     ? mkText()     :
+      type === 'image'    ? mkImage()    :
+      type === 'video'    ? mkVideo()    :
+                             mkReadMore();
     update(b => {
+      const idx = afterId ? b.findIndex(bl => bl.id === afterId) : -1;
       const copy = [...b];
-      copy.splice(index, 0,
-        type === 'text'     ? mkText()     :
-        type === 'image'    ? mkImage()    :
-        type === 'video'    ? mkVideo()    :
-                               mkReadMore()
-      );
+      copy.splice(idx + 1, 0, newBlock);
       return copy;
     });
+    setActiveId(newBlock.id);
   };
 
   const remove = (id: string) => update(b => b.filter(bl => bl.id !== id));
@@ -279,80 +267,67 @@ export function BlockEditor({ value, onChange }: {
   const setReadMore = (id: string, patch: Partial<Extract<Block, { type: 'readmore' }>>) =>
     update(b => b.map(bl => bl.id === id ? { ...bl, ...patch }      as Block : bl));
 
-  const blockTypeLabel = (b: Block) =>
-    b.type === 'text' ? '📝 Text' :
-    b.type === 'image' ? '📷 Image' :
-    b.type === 'video' ? '🎬 Video' :
-    '🔗 Read More';
-
   return (
-    <div className="space-y-1">
-      <AddButtons onAdd={(t) => insert(0, t)} />
+    <div className="rounded-xl border border-gray-200 bg-white">
+      <div className="relative px-4 py-3">
+        <InsertPoint isActive={activeId === null} onAdd={(t) => insertAfter(null, t)} />
 
-      {value.map((block, idx) => (
-        <div key={block.id}>
-          {/* Block card */}
-          <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
-
-            {/* Block toolbar */}
-            <div className="flex items-center justify-between gap-2 border-b border-gray-100 bg-gray-50 px-3 py-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
-                {blockTypeLabel(block)} — Block {idx + 1}
-              </span>
-              <div className="flex items-center gap-1">
-                <button onClick={() => move(block.id, -1)} disabled={idx === 0}
-                  className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 disabled:opacity-30">↑</button>
-                <button onClick={() => move(block.id, 1)} disabled={idx === value.length - 1}
-                  className="rounded px-1.5 py-0.5 text-xs text-gray-400 hover:bg-gray-100 disabled:opacity-30">↓</button>
-                <button onClick={() => remove(block.id)}
-                  className="rounded px-1.5 py-0.5 text-xs text-red-400 hover:bg-red-50">✕</button>
-              </div>
-            </div>
-
-            {/* Block content */}
-            <div className={block.type === 'text' ? '' : 'p-3'}>
-              {block.type === 'text' && (
+        {value.map((block, idx) => (
+          <div key={block.id}>
+            {block.type === 'text' && (
+              <div onFocusCapture={() => setActiveId(block.id)} onClick={() => setActiveId(block.id)}>
                 <RichTextEditor value={block.value} onChange={v => setText(block.id, v)} />
-              )}
-              {block.type === 'image' && (
-                <ImageBlock
+              </div>
+            )}
+            {block.type === 'image' && (
+              <div onClick={() => setActiveId(block.id)}>
+                <ImageEmbed
                   block={block as Extract<Block, { type: 'image' }>}
                   onFile={(f, p) => setFile(block.id, f, p)}
                   onRemove={() => remove(block.id)}
+                  onUp={() => move(block.id, -1)} onDown={() => move(block.id, 1)}
+                  canUp={idx > 0} canDown={idx < value.length - 1}
                 />
-              )}
-              {block.type === 'video' && (
-                <VideoBlock
+              </div>
+            )}
+            {block.type === 'video' && (
+              <div onClick={() => setActiveId(block.id)}>
+                <VideoEmbed
                   block={block as Extract<Block, { type: 'video' }>}
                   onChange={url => setVideoUrl(block.id, url)}
                   onRemove={() => remove(block.id)}
+                  onUp={() => move(block.id, -1)} onDown={() => move(block.id, 1)}
+                  canUp={idx > 0} canDown={idx < value.length - 1}
                 />
-              )}
-              {block.type === 'readmore' && (
-                <ReadMoreBlock
+              </div>
+            )}
+            {block.type === 'readmore' && (
+              <div onClick={() => setActiveId(block.id)}>
+                <ReadMoreEmbed
                   block={block as Extract<Block, { type: 'readmore' }>}
                   onChange={patch => setReadMore(block.id, patch)}
                   onRemove={() => remove(block.id)}
+                  onUp={() => move(block.id, -1)} onDown={() => move(block.id, 1)}
+                  canUp={idx > 0} canDown={idx < value.length - 1}
                 />
-              )}
-            </div>
+              </div>
+            )}
+
+            <InsertPoint isActive={activeId === block.id} onAdd={(t) => insertAfter(block.id, t)} />
           </div>
+        ))}
 
-          <AddButtons onAdd={(t) => insert(idx + 1, t)} />
-        </div>
-      ))}
-
-      {value.length === 0 && (
-        <div className="rounded-xl border-2 border-dashed border-gray-200 p-8 text-center text-gray-400">
-          <p className="text-sm font-semibold">No content blocks yet.</p>
-          <p className="mt-1 text-xs">Click the + button above to add your first text, image, video, or Read More block.</p>
-        </div>
-      )}
+        {value.length === 0 && (
+          <div className="rounded-lg border-2 border-dashed border-gray-200 py-10 text-center text-gray-400">
+            <p className="text-sm font-semibold">Start writing, or click + to add an image, video, or link button.</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
-/* ─── Serializer (used in parent form) ── */
+/* ─── Serializer (used in parent form) — UNCHANGED, backend contract intact ── */
 export function serializeBlocks(blocks: Block[]): {
   json: string;
   files: { fieldname: string; file: File }[];
@@ -366,7 +341,6 @@ export function serializeBlocks(blocks: Block[]): {
     }
 
     if (b.type === 'video') {
-      // Just store the URL string — no file upload needed
       return { type: 'video', videoUrl: b.videoUrl };
     }
 
@@ -374,7 +348,6 @@ export function serializeBlocks(blocks: Block[]): {
       return { type: 'readmore', url: b.url, label: b.label?.trim() ? b.label : 'Read More' };
     }
 
-    // image
     if (b.type === 'image' && b.file) {
       const fieldname = `block_img_${imgCount++}`;
       files.push({ fieldname, file: b.file });
@@ -390,7 +363,7 @@ export function serializeBlocks(blocks: Block[]): {
   return { json: JSON.stringify(json), files };
 }
 
-/* ─── Deserializer (used when editing existing article) ── */
+/* ─── Deserializer (used when editing existing article) — UNCHANGED ── */
 export function deserializeBlocks(raw: any[]): Block[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(b => {
@@ -403,7 +376,6 @@ export function deserializeBlocks(raw: any[]): Block[] {
     if (b.type === 'readmore') {
       return { id: uid(), type: 'readmore' as const, url: b.url || '', label: b.label || 'Read More' };
     }
-    // default: image
     return {
       id: uid(),
       type: 'image' as const,
