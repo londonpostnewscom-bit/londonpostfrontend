@@ -1,3 +1,4 @@
+
 import { useEffect, useRef } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
 
@@ -11,28 +12,11 @@ const TOOLS = [
   { cmd: 'insertOrderedList',   icon: '1. List',    title: 'Numbered List' },
   { cmd: 'justifyLeft',         icon: '⬅ Left',     title: 'Align Left' },
   { cmd: 'justifyCenter',       icon: '⬛ Center',   title: 'Center' },
+  { cmd: 'link',                icon: '🔗 Link',    title: 'Turn selected text into a link', isLink: true },
+  { cmd: 'unlink',              icon: '⛓️‍💥 Unlink', title: 'Remove link',                    isUnlink: true },
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
 ];
 
-/* ─── Paste-cleaning: preserve bold/headings, fix line-break structure ──
- *
- * The problem this solves: copying text from news sites / many web pages
- * puts HTML on the clipboard where the source wraps every visual LINE in
- * its own block element (one <div>/<p> per line, sometimes per word, for
- * layout/ad-injection reasons on the source page). If we trust that block
- * structure, every wrapper renders on its own row -- the "every word on a
- * new line" bug. But if we throw away ALL formatting to fix that, real
- * bold sub-headings embedded in the body (e.g. "War fatigue" above a
- * paragraph) get flattened to plain text too, which loses real structure.
- *
- * The fix: walk the clipboard HTML ourselves. Keep only a small allow-list
- * of inline tags (bold/italic/underline) and treat every block-level tag
- * as a "line boundary" -- not automatically a new paragraph. We decide
- * paragraph breaks the same way a person would read it: a blank line in
- * the source means a new paragraph; a single line break is just line-wrap
- * noise and gets collapsed into a space. A line that's short and entirely
- * bold (or a real <h1>-<h6> in the source) is treated as a sub-heading.
- */
 
 const HEADING_TAGS = new Set(['H1','H2','H3','H4','H5','H6']);
 const BLOCK_TAGS = new Set(['DIV','P','SECTION','ARTICLE','LI','TR','BR', ...HEADING_TAGS]);
@@ -152,12 +136,19 @@ function plainTextToParagraphs(text: string): string {
   return chunks.map(p => `<p>${escapeHtml(p)}</p>`).join('');
 }
 
+// Basic sanity check so we don't create javascript: links or similar.
+function isSafeUrl(url: string): boolean {
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed);
+}
+
 export function RichTextEditor({ value, onChange, placeholder }: {
   value: string;
   onChange: (html: string) => void;
   placeholder?: string;
 }) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
 
   // Set initial content once only
   useEffect(() => {
@@ -166,6 +157,21 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   }, []);
 
+  const saveSelection = () => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && editorRef.current?.contains(sel.anchorNode)) {
+      savedRangeRef.current = sel.getRangeAt(0).cloneRange();
+    }
+  };
+
+  const restoreSelection = () => {
+    const range = savedRangeRef.current;
+    if (!range) return;
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  };
+
   const exec = (cmd: string, isBlock = false) => {
     if (isBlock) {
       document.execCommand('formatBlock', false, cmd);
@@ -173,6 +179,45 @@ export function RichTextEditor({ value, onChange, placeholder }: {
       document.execCommand(cmd, false, undefined);
     }
     editorRef.current?.focus();
+  };
+
+  // Turns the current text selection into a real hyperlink. Requires an
+  // actual (non-collapsed) selection, since a link needs visible text to
+  // attach to. Opens safely in a new tab via target + rel, which
+  // execCommand doesn't set on its own.
+  const handleLink = () => {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      window.alert('First select the text you want to turn into a link, then click Link.');
+      return;
+    }
+
+    const url = window.prompt('Paste the link URL (must start with http:// or https://)', 'https://');
+    if (!url) return;
+    if (!isSafeUrl(url)) {
+      window.alert('That link needs to start with http://, https://, or mailto:.');
+      return;
+    }
+
+    document.execCommand('createLink', false, url.trim());
+
+    // execCommand doesn't let us set target/rel directly — patch the
+    // anchor(s) it just created so links always open in a new tab safely.
+    editorRef.current?.querySelectorAll(`a[href="${url.trim()}"]`).forEach(a => {
+      a.setAttribute('target', '_blank');
+      a.setAttribute('rel', 'noopener noreferrer');
+    });
+
+    editorRef.current?.focus();
+    handleInput();
+  };
+
+  const handleUnlink = () => {
+    restoreSelection();
+    document.execCommand('unlink', false, undefined);
+    editorRef.current?.focus();
+    handleInput();
   };
 
   const handleInput = () => {
@@ -207,7 +252,9 @@ export function RichTextEditor({ value, onChange, placeholder }: {
             title={t.title}
             onMouseDown={(e) => {
               e.preventDefault();
-              exec(t.cmd, t.isBlock);
+              if ((t as any).isLink)   { handleLink();   return; }
+              if ((t as any).isUnlink) { handleUnlink(); return; }
+              exec(t.cmd, (t as any).isBlock);
             }}
             className="min-w-[36px] rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-white hover:text-gray-900 hover:shadow-sm"
             dangerouslySetInnerHTML={{ __html: t.icon }}
@@ -221,7 +268,9 @@ export function RichTextEditor({ value, onChange, placeholder }: {
         contentEditable
         suppressContentEditableWarning
         onInput={handleInput}
-        onBlur={handleInput}
+        onBlur={() => { handleInput(); saveSelection(); }}
+        onMouseUp={saveSelection}
+        onKeyUp={saveSelection}
         onPaste={handlePaste}
         data-placeholder={placeholder || 'Write or paste article content here...'}
         style={{ resize: 'vertical', overflow: 'auto', minHeight: '220px' }}
@@ -230,6 +279,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
           [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-gray-800
           [&_b]:font-bold [&_strong]:font-bold
           [&_i]:italic [&_em]:italic
+          [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-300 [&_a]:underline-offset-2
           [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
           [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
           [&_li]:mb-1 [&_p]:mb-2 [&_p]:leading-relaxed
