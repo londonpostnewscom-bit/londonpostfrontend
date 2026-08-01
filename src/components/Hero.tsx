@@ -1,19 +1,24 @@
 
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { cld } from '../utils/Cloudinary';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 type HeroSlide = {
-  id: string; title: string; subtitle: string;
-  mediaType: 'image' | 'youtube'; mediaUrl: string; youtubeId: string;
-  ctaLink: string; badgeText: string; previewCaption: string; isArticle: boolean;
-  _sortDate: number;
+  id:             string;
+  title:          string;
+  subtitle:       string;
+  mediaType:      'image' | 'youtube';
+  mediaUrl:       string;
+  youtubeId:      string;
+  ctaLink:        string;
+  badgeText:      string;
+  previewCaption: string;
+  isArticle:      boolean;
+  _sortDate:      number;
 };
 
-// Mirrors backend utils/parseArticleDate.js so client-side ordering
-// always matches what "latest" actually means, regardless of API order.
 const MONTHS: Record<string, number> = {
   january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11,
@@ -141,8 +146,14 @@ export function Hero() {
                   />
                 </div>
               ) : slide.mediaUrl ? (
-                <img src={slide.mediaUrl} alt={slide.title} className="w-full object-cover"
-                  style={{ maxHeight: '440px', minHeight: '260px' }} />
+                // Cloudinary-optimized: hero media is the single largest
+                // image on the whole homepage — worth the biggest win here.
+                <img
+                  src={cld(slide.mediaUrl, 1000)}
+                  alt={slide.title}
+                  className="w-full object-cover"
+                  style={{ maxHeight: '440px', minHeight: '260px' }}
+                />
               ) : (
                 <div className="flex aspect-video items-center justify-center bg-slate-800">
                   <span className="text-sm text-slate-500">No media</span>
