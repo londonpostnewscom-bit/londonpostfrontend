@@ -59,6 +59,7 @@ export function RegionPage() {
   const [archivedVisible, setArchivedVisible] = useState(GRID_BATCH);
 
   useEffect(() => {
+    let cancelled = false;
     setApiLoaded(false);
 
     let url = `${API_URL}/region-articles/region/${area}`;
@@ -67,10 +68,13 @@ export function RegionPage() {
     fetch(url)
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
+        if (cancelled) return;
         setApiArticles(data.map(apiToArticle));
         setApiLoaded(true);
       })
-      .catch(() => setApiLoaded(true));
+      .catch(() => { if (!cancelled) setApiLoaded(true); });
+
+    return () => { cancelled = true; };
   }, [area, selectedCategory]);
 
   useEffect(() => {
