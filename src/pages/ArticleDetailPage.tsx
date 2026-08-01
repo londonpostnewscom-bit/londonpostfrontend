@@ -1,10 +1,15 @@
 
-
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
+import { cld } from '../utils/Cloudinary';
+import { ArticleSkeleton } from '../components/PageSkeleton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+// Per-article in-memory cache, same pattern as Home/Opinion — survives SPA
+// navigation, clears naturally on a real page reload.
+const articleCache = new Map<string, { article: any; related: any[] }>();
 
 function isHTML(str: string) {
   return /<[a-z][\s\S]*>/i.test(str) || /&lt;[a-z][\s\S]*&gt;/i.test(str);
@@ -117,8 +122,9 @@ function ArticleBlock({ block }: { block: { type: string; value?: string; url?: 
     return (
       <figure className="my-8 w-full">
         <img
-          src={block.url}
+          src={cld(block.url, 1200)}
           alt=""
+          loading="lazy"
           className="w-full rounded-2xl shadow-sm"
           style={{ height: 'auto', display: 'block' }}
         />
@@ -353,25 +359,44 @@ export function ArticleDetailPage() {
 
   useEffect(() => {
     if (!id) return;
+
+    const cached = articleCache.get(id);
+    if (cached) {
+      setArticle(cached.article);
+      setRelated(cached.related);
+      setLoading(false);
+      setNotFound(false);
+      return;
+    }
+
     setLoading(true);
     setArticle(null);
     setRelated([]);
     setNotFound(false);
 
     const tryFetch = async () => {
+      // FIXED: previously this awaited /region-articles/:id FIRST, and only
+      // started /section-articles/:id if that failed — meaning every single
+      // section article (the majority of the site's content: UK, Opinion,
+      // Interviews, Video, Tashkent, TIIF, Aviation, World, Editor's Picks,
+      // In Focus, Diplomatic Corner) paid for a full failed round-trip
+      // before the correct request even began. Firing both in parallel and
+      // taking whichever one actually has the article cuts that wasted
+      // round-trip out entirely.
+      const [regionResult, sectionResult] = await Promise.allSettled([
+        fetch(`${API_URL}/region-articles/${id}`).then(r => (r.ok ? r.json() : null)),
+        fetch(`${API_URL}/section-articles/${id}`).then(r => (r.ok ? r.json() : null)),
+      ]);
+
       let art: any = null;
       let source = '';
 
-      try {
-        const r = await fetch(`${API_URL}/region-articles/${id}`);
-        if (r.ok) { art = await r.json(); source = 'region'; }
-      } catch {}
-
-      if (!art) {
-        try {
-          const r = await fetch(`${API_URL}/section-articles/${id}`);
-          if (r.ok) { art = await r.json(); source = 'section'; }
-        } catch {}
+      if (regionResult.status === 'fulfilled' && regionResult.value) {
+        art = regionResult.value;
+        source = 'region';
+      } else if (sectionResult.status === 'fulfilled' && sectionResult.value) {
+        art = sectionResult.value;
+        source = 'section';
       }
 
       if (!art) { setNotFound(true); setLoading(false); return; }
@@ -393,14 +418,19 @@ export function ArticleDetailPage() {
           .map((a: any) => ({ ...a, _score: getKeywords(a.title || '').filter((kw) => keywords.includes(kw)).length }))
           .sort((a: any, b: any) => b._score - a._score)
           .slice(0, 3);
+        let relatedList: any[] = [];
         if (scored.length < 2) {
           const existing = new Set(scored.map((a: any) => a._id));
           const extras = allArticles.filter((a: any) => (a._id || a.id) !== id && !existing.has(a._id)).slice(0, 3 - scored.length);
-          setRelated([...scored, ...extras]);
+          relatedList = [...scored, ...extras];
         } else {
-          setRelated(scored);
+          relatedList = scored;
         }
-      } catch {}
+        setRelated(relatedList);
+        articleCache.set(id, { article: art, related: relatedList });
+      } catch {
+        articleCache.set(id, { article: art, related: [] });
+      }
 
       setLoading(false);
     };
@@ -408,11 +438,7 @@ export function ArticleDetailPage() {
     tryFetch();
   }, [id]);
 
-  if (loading) return (
-    <div className="flex min-h-screen items-center justify-center">
-      <div className="h-10 w-10 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-    </div>
-  );
+  if (loading) return <ArticleSkeleton />;
 
   if (notFound || !article) return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-4 px-4 text-center">
@@ -432,7 +458,10 @@ export function ArticleDetailPage() {
     <div>
       {article.imageUrl && !isVideo && (
         <div className="w-full">
-          <img src={article.imageUrl} alt={article.title}
+          {/* Cloudinary-optimized: served resized + auto-compressed instead
+              of the full original file, regardless of how large it was
+              uploaded at. w_1600 comfortably covers full-width desktop. */}
+          <img src={cld(article.imageUrl, 1600)} alt={article.title}
             className="w-full object-cover"
             style={{ height: 'clamp(320px, 55vw, 620px)' }} />
         </div>
@@ -541,7 +570,9 @@ export function ArticleDetailPage() {
                         className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
                         {rel.imageUrl && (
                           <div className="aspect-[4/3] overflow-hidden">
-                            <img src={rel.imageUrl} alt={rel.title}
+                            {/* Small card thumbnail — w_500 is plenty, no
+                                reason to load a multi-MB original here */}
+                            <img src={cld(rel.imageUrl, 500)} alt={rel.title} loading="lazy"
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                           </div>
                         )}
