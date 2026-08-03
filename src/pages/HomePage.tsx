@@ -147,9 +147,7 @@ function CenterHeader({
         {title}
       </h2>
       {description && (
-        <p className={`mx-auto mt-3 max-w-xl text-sm leading-relaxed ${dark ? 'text-slate-400' : 'text-slate-500'}`}>
-          {description}
-        </p>
+      
       )}
       {action && <div className="mt-6">{action}</div>}
     </div>
