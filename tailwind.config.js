@@ -4,10 +4,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        primary: '#0e2a6d',
-        accent: '#c89435',
-        soft: '#f4f7fb',
-        ink: '#162033'
+              primary: '#16324F',  // navy — your logo, structural
+  accent:  '#B3231D',  // red  — your logo, urgent/investigative
+  gold:    '#C9932F',  // editorial warmth
+  lagoon:  '#1F6F6B',  // regional/forum cool
+  azure:   '#2E6F9E',  // aviation — sky
+  ink:     '#0B1220',
+  soft:    '#F4F5F7',
       },
       boxShadow: {
         soft: '0 20px 50px rgba(15, 23, 42, 0.08)'
