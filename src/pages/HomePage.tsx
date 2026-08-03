@@ -1,4 +1,6 @@
 
+
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -135,9 +137,9 @@ const DARK_BG = 'bg-ink';
 /* ─── Shared, tone-aware building blocks ───────────────────────────── */
 
 function CenterHeader({
-  title,  action, dark = false, tone = 'crimson',
+  title, description, action, dark = false, tone = 'crimson',
 }: {
-  title: string;  action?: React.ReactNode; dark?: boolean; tone?: Tone;
+  title: string; description?: string; action?: React.ReactNode; dark?: boolean; tone?: Tone;
 }) {
   const t = TONE[tone];
   return (
@@ -146,12 +148,17 @@ function CenterHeader({
       <h2 className={`mt-4 text-[1.75rem] font-extrabold tracking-tight lg:text-[2.25rem] ${dark ? 'text-white' : 'text-ink'}`}>
         {title}
       </h2>
-      )}
+   
+     
       {action && <div className="mt-6">{action}</div>}
     </div>
   );
 }
 
+/* Left-aligned variant — used by Tashkent & Aviation for rhythm: not
+   every section on a real front page is centered, and mixing a centered
+   masthead style with a left-aligned "section front" style is itself
+   how BBC/CNN vary section headers across one homepage. */
 function SideHeader({
   title, action, dark = false, tone = 'gold',
 }: {
