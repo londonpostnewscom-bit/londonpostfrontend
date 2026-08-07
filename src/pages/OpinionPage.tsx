@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -40,6 +39,17 @@ function QuoteIcon() {
   );
 }
 
+// Sorts newest-first by the article's `date` field.
+// Unparseable dates are pushed to the end rather than breaking the sort.
+function byDateDesc(a: Article, b: Article) {
+  const dateA = new Date(a.date).getTime();
+  const dateB = new Date(b.date).getTime();
+  if (isNaN(dateA) && isNaN(dateB)) return 0;
+  if (isNaN(dateA)) return 1;
+  if (isNaN(dateB)) return -1;
+  return dateB - dateA;
+}
+
 const FEATURED_BATCH = 6;
 const GRID_BATCH = 4;
 
@@ -62,9 +72,9 @@ export function OpinionPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const featuredAll = articles.filter((a) => a.featured && !a.archived);
-  const latestAll = articles.filter((a) => !a.archived);
-  const archivedAll = articles.filter((a) => a.archived);
+  const featuredAll = articles.filter((a) => a.featured && !a.archived).sort(byDateDesc);
+  const latestAll = articles.filter((a) => !a.archived).sort(byDateDesc);
+  const archivedAll = articles.filter((a) => a.archived).sort(byDateDesc);
 
   const visibleFeatured = featuredAll.slice(0, featuredVisible);
   const visibleLatest = latestAll.slice(0, latestVisible);
@@ -79,9 +89,9 @@ export function OpinionPage() {
   return (
     <div className="min-h-screen bg-amber-50">
       <div className="bg-gradient-to-br from-slate-900 to-slate-600 px-4 py-16 text-center text-white">
-        <span className="inline-block rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 text-2xl font-bold uppercase tracking-widest text-accent">
-          Opinion
-        </span>
+   <span className="inline-block rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-accent sm:text-sm">
+  Opinion
+</span>
       
       </div>
 
@@ -127,17 +137,16 @@ export function OpinionPage() {
                             </span>
                           </div>
                         </div>
-
-                        {article.image && (
-                          <div className="overflow-hidden">
-                            <img
-                              src={cld(article.image, 900)}
-                              alt={article.title}
-                              loading="lazy"
-                              className="h-full w-full object-cover transition duration-500 group-hover:scale-105 lg:rounded-r-[2rem]"
-                            />
-                          </div>
-                        )}
+{article.image && (
+  <div className="overflow-hidden">
+    <img
+      src={cld(article.image, 900)}
+      alt={article.title}
+      loading="lazy"
+      className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-105 sm:aspect-[16/9] lg:aspect-auto lg:h-full lg:rounded-r-[2rem]"
+    />
+  </div>
+)}
                       </div>
                     </Link>
                   ))}
