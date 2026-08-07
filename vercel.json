@@ -9,7 +9,7 @@
           "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
         }
       ],
-      "destination": "https://londonpostbackend-production.up.railway.app/share/article/:id"
+      "destination": "https://YOUR-BACKEND-DOMAIN.com/share/article/:id"
     },
     {
       "source": "/video/:id",
@@ -20,7 +20,7 @@
           "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
         }
       ],
-      "destination": "https://londonpostbackend-production.up.railway.app/share/video/:id"
+      "destination": "https://YOUR-BACKEND-DOMAIN.com/share/video/:id"
     },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
