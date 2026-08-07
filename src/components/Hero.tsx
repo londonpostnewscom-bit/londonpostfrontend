@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cld } from '../utils/Cloudinary';
@@ -52,8 +51,25 @@ function mapArticle(a: any): HeroSlide {
   };
 }
 
+// De-duplicates by id (falling back to a normalized title match when an id
+// is ever missing/blank) while preserving the incoming sort order. This is
+// what stops the same article from landing in two hero slots when it shows
+// up in both the region-articles and section-articles "world" responses.
+function dedupeSlides(slides: HeroSlide[]): HeroSlide[] {
+  const seen = new Set<string>();
+  const out: HeroSlide[] = [];
+  for (const slide of slides) {
+    const key = slide.id ? `id:${slide.id}` : `title:${slide.title.trim().toLowerCase()}`;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(slide);
+  }
+  return out;
+}
+
 /* World hero = the 5 latest articles cross-posted to "world" from BOTH
-   RegionArticle and SectionArticle, always freshest-first. */
+   RegionArticle and SectionArticle, always freshest-first, de-duplicated
+   so the same article can never occupy more than one slide. */
 async function fetchWorldHeroes(): Promise<HeroSlide[]> {
   try {
     const [rr, sr] = await Promise.all([
@@ -62,10 +78,11 @@ async function fetchWorldHeroes(): Promise<HeroSlide[]> {
     ]);
     const regionData: any[] = rr.ok ? await rr.json() : [];
     const sectionData: any[] = sr.ok ? await sr.json() : [];
-    return [...regionData, ...sectionData]
-      .map(mapArticle)
-      .sort((a, b) => b._sortDate - a._sortDate)
-      .slice(0, 5);
+    return dedupeSlides(
+      [...regionData, ...sectionData]
+        .map(mapArticle)
+        .sort((a, b) => b._sortDate - a._sortDate)
+    ).slice(0, 5);
   } catch { return []; }
 }
 
@@ -75,13 +92,13 @@ async function fetchManualHeroes(): Promise<HeroSlide[]> {
     if (!r.ok) return [];
     const raw = await r.json();
     const list: any[] = Array.isArray(raw) ? raw : [raw];
-    return list.filter(Boolean).map(h => ({
+    return dedupeSlides(list.filter(Boolean).map(h => ({
       id: h._id || '', title: h.title || '', subtitle: h.subtitle || '',
       mediaType: (h.mediaType === 'youtube' ? 'youtube' : 'image') as 'image' | 'youtube',
       mediaUrl: h.mediaUrl || '', youtubeId: h.youtubeId || '',
       ctaLink: h.ctaLink || '#', badgeText: h.badgeText || 'Featured',
       previewCaption: h.previewCaption || '', isArticle: false, _sortDate: 0,
-    }));
+    })));
   } catch { return []; }
 }
 
