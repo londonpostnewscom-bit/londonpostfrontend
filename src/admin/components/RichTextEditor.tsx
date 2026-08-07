@@ -1,5 +1,3 @@
-
-
 import { useEffect, useRef } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
 
@@ -18,34 +16,51 @@ const TOOLS = [
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
 ];
 
-
-const HEADING_TAGS = new Set(['H1','H2','H3','H4','H5','H6']);
-const BLOCK_TAGS = new Set(['DIV','P','SECTION','ARTICLE','LI','TR','BR', ...HEADING_TAGS]);
+const HEADING_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
+// NOTE: LI is intentionally handled separately (inside UL/OL), not as a
+// generic paragraph-breaking block — see extractLines below.
+const BLOCK_TAGS = new Set(['DIV', 'P', 'SECTION', 'ARTICLE', 'TR', ...HEADING_TAGS]);
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-type Line = { html: string; isBlank: boolean; isHeadingSource: boolean };
+// Basic sanity check so we don't create javascript: links or similar.
+function isSafeUrl(url: string): boolean {
+  const trimmed = url.trim();
+  return /^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed);
+}
 
+type Fmt = { bold: boolean; italic: boolean; underline: boolean };
+type Line = { html: string; tag: 'p' | 'h2' | 'h3' | 'li-ul' | 'li-ol' };
+
+/**
+ * Walks the pasted DOM and produces ONE output line per source block-level
+ * element (p, div, h1-h6, li, tr) — never merging separate source
+ * paragraphs together, and never guessing that a short bold line should
+ * become a heading. What was a paragraph in the source stays a paragraph.
+ * What was a heading tag in the source stays a heading. Bold/italic/
+ * underline/links are preserved wherever they were actually applied.
+ */
 function extractLines(root: Node): Line[] {
   const lines: Line[] = [];
   let current: string[] = [];
 
-  function flushLine() {
+  function pushLine(tag: Line['tag']) {
     const html = current.join('').trim();
     current = [];
-    lines.push(html === ''
-      ? { html: '', isBlank: true, isHeadingSource: false }
-      : { html, isBlank: false, isHeadingSource: false });
+    if (html !== '') lines.push({ html, tag });
   }
 
-  function walk(node: Node, inheritBold: boolean) {
+  function walk(node: Node, fmt: Fmt) {
     if (node.nodeType === Node.TEXT_NODE) {
       const text = (node.textContent || '').replace(/\u00A0/g, ' ');
       if (text === '') return;
-      const escaped = escapeHtml(text);
-      current.push(inheritBold ? `<b>${escaped}</b>` : escaped);
+      let escaped = escapeHtml(text);
+      if (fmt.bold) escaped = `<b>${escaped}</b>`;
+      if (fmt.italic) escaped = `<i>${escaped}</i>`;
+      if (fmt.underline) escaped = `<u>${escaped}</u>`;
+      current.push(escaped);
       return;
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return;
@@ -54,93 +69,97 @@ function extractLines(root: Node): Line[] {
     const tag = el.tagName;
 
     if (tag === 'SCRIPT' || tag === 'STYLE') return;
-    if (tag === 'BR') { flushLine(); return; }
+    if (tag === 'BR') { current.push('<br>'); return; }
 
-    const isBoldTag = tag === 'B' || tag === 'STRONG';
+    if (tag === 'UL' || tag === 'OL') {
+      const liTag: Line['tag'] = tag === 'UL' ? 'li-ul' : 'li-ol';
+      el.querySelectorAll(':scope > li').forEach(li => {
+        (li.childNodes as any).forEach((child: Node) => walk(child, fmt));
+        pushLine(liTag);
+      });
+      return;
+    }
+
+    if (tag === 'A') {
+      const href = (el.getAttribute('href') || '').trim();
+      const startLen = current.length;
+      el.childNodes.forEach(child => walk(child, fmt));
+      if (isSafeUrl(href)) {
+        const inner = current.splice(startLen).join('');
+        current.push(`<a href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">${inner}</a>`);
+      }
+      return;
+    }
+
     const isHeadingTag = HEADING_TAGS.has(tag);
-    const boldNow = inheritBold || isBoldTag || isHeadingTag;
+    const newFmt: Fmt = {
+      bold: fmt.bold || tag === 'B' || tag === 'STRONG',
+      italic: fmt.italic || tag === 'I' || tag === 'EM',
+      underline: fmt.underline || tag === 'U',
+    };
     const isBlock = BLOCK_TAGS.has(tag);
 
-    el.childNodes.forEach(child => walk(child, boldNow));
+    el.childNodes.forEach(child => walk(child, newFmt));
 
     if (isBlock) {
-      flushLine();
-      if (isHeadingTag && lines.length > 0) {
-        lines[lines.length - 1].isHeadingSource = true;
+      if (isHeadingTag) {
+        // Preserve the source's actual heading level; only H1/H2 map to H2,
+        // everything H3 and deeper maps to H3 (the two levels this editor supports).
+        pushLine(tag === 'H1' || tag === 'H2' ? 'h2' : 'h3');
+      } else {
+        pushLine('p');
       }
     }
   }
 
-  walk(root, false);
-  flushLine();
+  walk(root, { bold: false, italic: false, underline: false });
+  pushLine('p'); // flush any trailing content that wasn't inside a block element
 
-  // Collapse consecutive blank lines into one
-  return lines.filter((l, i) => {
-    if (!l.isBlank) return true;
-    const prev = lines[i - 1];
-    return !(prev && prev.isBlank);
-  });
+  return lines;
 }
 
-// Short + fully-bold (or a real heading tag) reads as a sub-heading.
-// Long bold passages (emphasis within a normal paragraph) stay as <p>.
-function looksLikeHeading(line: Line): boolean {
-  if (line.isBlank) return false;
-  if (line.isHeadingSource) return true;
-
-  const plain = line.html.replace(/<[^>]+>/g, '');
-  if (plain.length === 0 || plain.length > 80) return false;
-
-  return /^<b>.*<\/b>$/.test(line.html.trim());
-}
-
-function buildParagraphs(lines: Line[]): string {
+function buildContent(lines: Line[]): string {
   const out: string[] = [];
-  let buffer: string[] = [];
+  let listBuffer: { tag: 'li-ul' | 'li-ol'; items: string[] } | null = null;
 
-  function flushBuffer() {
-    if (buffer.length === 0) return;
-    const joined = buffer.join(' ').replace(/\s+/g, ' ').trim();
-    if (joined) out.push(`<p>${joined}</p>`);
-    buffer = [];
+  function flushList() {
+    if (!listBuffer) return;
+    const wrap = listBuffer.tag === 'li-ul' ? 'ul' : 'ol';
+    out.push(`<${wrap}>${listBuffer.items.map(i => `<li>${i}</li>`).join('')}</${wrap}>`);
+    listBuffer = null;
   }
 
   for (const line of lines) {
-    if (line.isBlank) { flushBuffer(); continue; }
-    if (looksLikeHeading(line)) {
-      flushBuffer();
-      const plain = line.html.replace(/<\/?b>/g, '').replace(/<\/?strong>/g, '');
-      out.push(`<h3>${plain}</h3>`);
+    if (line.tag === 'li-ul' || line.tag === 'li-ol') {
+      if (!listBuffer || listBuffer.tag !== line.tag) { flushList(); listBuffer = { tag: line.tag, items: [] }; }
+      listBuffer.items.push(line.html);
       continue;
     }
-    buffer.push(line.html);
+    flushList();
+    if (line.tag === 'h2' || line.tag === 'h3') {
+      out.push(`<${line.tag}>${line.html}</${line.tag}>`);
+    } else {
+      out.push(`<p>${line.html}</p>`);
+    }
   }
-  flushBuffer();
+  flushList();
   return out.join('');
 }
 
 function cleanPastedHtml(html: string): string {
   const parsed = new DOMParser().parseFromString(html, 'text/html');
   const lines = extractLines(parsed.body);
-  return buildParagraphs(lines);
+  return buildContent(lines);
 }
 
 // Plain-text fallback (e.g. pasting from a source with no HTML at all,
-// like a plain .txt file or terminal) -- same blank-line paragraph rule,
-// just with no formatting to preserve.
+// like a plain .txt file or terminal). Every single line break becomes its
+// own paragraph — we don't merge lines, and we don't require a blank line
+// between them, so paragraph breaks are preserved exactly as typed.
 function plainTextToParagraphs(text: string): string {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ');
-  const chunks = normalized
-    .split(/\n\s*\n+/)
-    .map(p => p.replace(/\n+/g, ' ').replace(/[ \t]+/g, ' ').trim())
-    .filter(Boolean);
-  return chunks.map(p => `<p>${escapeHtml(p)}</p>`).join('');
-}
-
-// Basic sanity check so we don't create javascript: links or similar.
-function isSafeUrl(url: string): boolean {
-  const trimmed = url.trim();
-  return /^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed);
+  const lines = normalized.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim());
+  return lines.filter(l => l !== '').map(l => `<p>${escapeHtml(l)}</p>`).join('');
 }
 
 export function RichTextEditor({ value, onChange, placeholder }: {
@@ -182,10 +201,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     editorRef.current?.focus();
   };
 
-  // Turns the current text selection into a real hyperlink. Requires an
-  // actual (non-collapsed) selection, since a link needs visible text to
-  // attach to. Opens safely in a new tab via target + rel, which
-  // execCommand doesn't set on its own.
   const handleLink = () => {
     restoreSelection();
     const sel = window.getSelection();
@@ -203,8 +218,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
 
     document.execCommand('createLink', false, url.trim());
 
-    // execCommand doesn't let us set target/rel directly — patch the
-    // anchor(s) it just created so links always open in a new tab safely.
     editorRef.current?.querySelectorAll(`a[href="${url.trim()}"]`).forEach(a => {
       a.setAttribute('target', '_blank');
       a.setAttribute('rel', 'noopener noreferrer');
