@@ -1,8 +1,27 @@
 {
   "rewrites": [
     {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+      "source": "/article/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
+        }
+      ],
+      "destination": "https://YOUR-BACKEND-DOMAIN.com/share/article/:id"
+    },
+    {
+      "source": "/video/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
+        }
+      ],
+      "destination": "https://YOUR-BACKEND-DOMAIN.com/share/video/:id"
+    },
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
