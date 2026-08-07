@@ -18,8 +18,10 @@ const TOOLS = [
 
 const HEADING_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
 // NOTE: LI is intentionally handled separately (inside UL/OL), not as a
-// generic paragraph-breaking block — see extractLines below.
-const BLOCK_TAGS = new Set(['DIV', 'P', 'SECTION', 'ARTICLE', 'TR', ...HEADING_TAGS]);
+// generic paragraph-breaking block — see extractLines below. BLOCKQUOTE
+// is included so a pasted pull-quote gets its own line instead of being
+// silently absorbed into whatever paragraph follows it.
+const BLOCK_TAGS = new Set(['DIV', 'P', 'SECTION', 'ARTICLE', 'TR', 'BLOCKQUOTE', ...HEADING_TAGS]);
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -32,7 +34,7 @@ function isSafeUrl(url: string): boolean {
 }
 
 type Fmt = { bold: boolean; italic: boolean; underline: boolean };
-type Line = { html: string; tag: 'p' | 'h2' | 'h3' | 'li-ul' | 'li-ol' };
+type Line = { html: string; tag: 'p' | 'h2' | 'h3' | 'li-ul' | 'li-ol' | 'blockquote' };
 
 /**
  * Walks the pasted DOM and produces ONE output line per source block-level
@@ -92,10 +94,18 @@ function extractLines(root: Node): Line[] {
     }
 
     const isHeadingTag = HEADING_TAGS.has(tag);
+    // Google Docs / Word often express bold/italic/underline via an
+    // inline style attribute (e.g. <span style="font-style:italic">)
+    // rather than a semantic <b>/<i>/<u> tag — checking only tag names
+    // silently dropped that formatting on paste. This checks both.
+    const style = el.getAttribute('style') || '';
+    const styleBold = /font-weight\s*:\s*(bold|[6-9]\d\d)/i.test(style);
+    const styleItalic = /font-style\s*:\s*italic/i.test(style);
+    const styleUnderline = /text-decoration[^:;]*:[^;]*underline/i.test(style);
     const newFmt: Fmt = {
-      bold: fmt.bold || tag === 'B' || tag === 'STRONG',
-      italic: fmt.italic || tag === 'I' || tag === 'EM',
-      underline: fmt.underline || tag === 'U',
+      bold: fmt.bold || tag === 'B' || tag === 'STRONG' || styleBold,
+      italic: fmt.italic || tag === 'I' || tag === 'EM' || styleItalic,
+      underline: fmt.underline || tag === 'U' || styleUnderline,
     };
     const isBlock = BLOCK_TAGS.has(tag);
 
@@ -106,6 +116,8 @@ function extractLines(root: Node): Line[] {
         // Preserve the source's actual heading level; only H1/H2 map to H2,
         // everything H3 and deeper maps to H3 (the two levels this editor supports).
         pushLine(tag === 'H1' || tag === 'H2' ? 'h2' : 'h3');
+      } else if (tag === 'BLOCKQUOTE') {
+        pushLine('blockquote');
       } else {
         pushLine('p');
       }
@@ -138,6 +150,8 @@ function buildContent(lines: Line[]): string {
     flushList();
     if (line.tag === 'h2' || line.tag === 'h3') {
       out.push(`<${line.tag}>${line.html}</${line.tag}>`);
+    } else if (line.tag === 'blockquote') {
+      out.push(`<blockquote>${line.html}</blockquote>`);
     } else {
       out.push(`<p>${line.html}</p>`);
     }
@@ -296,6 +310,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
           [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-300 [&_a]:underline-offset-2
           [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
           [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
+          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:my-3 [&_blockquote]:italic [&_blockquote]:text-gray-600
           [&_li]:mb-1 [&_p]:mb-2 [&_p]:leading-relaxed
           empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
       />
