@@ -1,4 +1,5 @@
 
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -456,22 +457,18 @@ export function ArticleDetailPage() {
 
   return (
     <div>
-      {article.imageUrl && !isVideo && (
-        <div className="w-full">
-          {/* Cloudinary-optimized: served resized + auto-compressed instead
-              of the full original file, regardless of how large it was
-              uploaded at. w_1600 comfortably covers full-width desktop. */}
-          <img src={cld(article.imageUrl, 1600)} alt={article.title}
-            className="w-full object-cover"
-            style={{ height: 'clamp(320px, 55vw, 620px)' }} />
-        </div>
-      )}
-
       <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
         {/*
           ── Layout:
           [share sidebar (hidden on mobile)] | [article content] | [ad banner (xl only)]
           On mobile: share buttons appear inline below the Back button
+
+          NOTE: the cover image now lives INSIDE this same contained column
+          (previously it was full-viewport-width above this container,
+          which is what made it look oversized compared to sites like
+          Financia that keep the cover image within the article's own
+          width). It's capped to a sensible max height instead of scaling
+          with viewport width.
         */}
         <div className="grid gap-10 xl:grid-cols-[56px,1fr,300px]">
 
@@ -500,7 +497,7 @@ export function ArticleDetailPage() {
               </div>
             </div>
 
-            {isVideo && (
+            {isVideo ? (
               <div className="mb-8 aspect-video w-full overflow-hidden rounded-2xl shadow-lg">
                 <iframe
                   src={`https://www.youtube.com/embed/${article.videoId}?rel=0&modestbranding=1`}
@@ -508,6 +505,17 @@ export function ArticleDetailPage() {
                   className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen />
+              </div>
+            ) : article.imageUrl && (
+              // Cloudinary-optimized: served resized + auto-compressed instead
+              // of the full original file, regardless of how large it was
+              // uploaded at. Contained within the article column, capped
+              // to a max height so it reads like a normal cover image
+              // rather than a full-bleed banner.
+              <div className="mb-8 overflow-hidden rounded-2xl shadow-sm">
+                <img src={cld(article.imageUrl, 1200)} alt={article.title}
+                  className="w-full object-cover"
+                  style={{ maxHeight: '460px', minHeight: '260px' }} />
               </div>
             )}
 
