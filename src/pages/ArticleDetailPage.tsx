@@ -1,5 +1,3 @@
-
-
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -222,6 +220,17 @@ function ShareSidebar({ title }: { title: string }) {
       icon: (
         <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.259 5.632L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/>
+        </svg>
+      ),
+    },
+    {
+      label: 'Telegram',
+      href: `https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`,
+      color: '#229ED9',
+      hoverColor: '#1b8ac4',
+      icon: (
+        <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+          <path d="M22.05 3.44a1.5 1.5 0 00-1.53-.26L2.4 10.1a1.5 1.5 0 00.06 2.8l4.72 1.7 1.83 5.87a1.5 1.5 0 002.5.63l2.6-2.53 4.62 3.4a1.5 1.5 0 002.36-.9l3.4-15.79a1.5 1.5 0 00-.44-1.34zM8.98 14.1l-.05 3.3-1.36-4.36 11.6-7.05L8.98 14.1z"/>
         </svg>
       ),
     },
@@ -656,6 +665,13 @@ function MobileShareBar({ title }: { title: string }) {
         style={{ backgroundColor: '#000' }} title="X (Twitter)">
         <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
           <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.737-8.835L1.254 2.25H8.08l4.259 5.632L18.244 2.25zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77z"/>
+        </svg>
+      </a>
+      <a href={`https://t.me/share/url?url=${encodedUrl}&text=${encodedTitle}`} target="_blank" rel="noopener noreferrer"
+        className="flex h-8 w-8 items-center justify-center rounded-full text-white shadow-sm transition hover:scale-110"
+        style={{ backgroundColor: '#229ED9' }} title="Telegram">
+        <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4">
+          <path d="M22.05 3.44a1.5 1.5 0 00-1.53-.26L2.4 10.1a1.5 1.5 0 00.06 2.8l4.72 1.7 1.83 5.87a1.5 1.5 0 002.5.63l2.6-2.53 4.62 3.4a1.5 1.5 0 002.36-.9l3.4-15.79a1.5 1.5 0 00-.44-1.34zM8.98 14.1l-.05 3.3-1.36-4.36 11.6-7.05L8.98 14.1z"/>
         </svg>
       </a>
       <button onClick={handleCopy} title="Copy link"
