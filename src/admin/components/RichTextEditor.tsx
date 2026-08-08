@@ -1,5 +1,9 @@
-import { useEffect, useRef } from 'react';
+
+import { useEffect, useRef, useState } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
+import { useAdminAuth } from '../context/AdminAuthContext';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const TOOLS = [
   { cmd: 'bold',                icon: '<b>B</b>',   title: 'Bold' },
@@ -14,36 +18,106 @@ const TOOLS = [
   { cmd: 'link',                icon: '🔗 Link',    title: 'Turn selected text into a link', isLink: true },
   { cmd: 'unlink',              icon: '⛓️‍💥 Unlink', title: 'Remove link',                    isUnlink: true },
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
+  { cmd: 'image',               icon: '🖼️ Image',   title: 'Insert an image into the article body', isImage: true },
 ];
 
 const HEADING_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
-// NOTE: LI is intentionally handled separately (inside UL/OL), not as a
-// generic paragraph-breaking block — see extractLines below. BLOCKQUOTE
-// is included so a pasted pull-quote gets its own line instead of being
-// silently absorbed into whatever paragraph follows it.
-const BLOCK_TAGS = new Set(['DIV', 'P', 'SECTION', 'ARTICLE', 'TR', 'BLOCKQUOTE', ...HEADING_TAGS]);
+const BLOCK_TAGS = new Set(['DIV', 'P', 'SECTION', 'ARTICLE', 'TR', 'BLOCKQUOTE', 'FIGURE', 'FIGCAPTION', ...HEADING_TAGS]);
 
 function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-// Basic sanity check so we don't create javascript: links or similar.
+// Used for <a href> links only — links can trigger navigation, so this
+// stays strict (real http(s)/mailto only).
 function isSafeUrl(url: string): boolean {
   const trimmed = url.trim();
   return /^https?:\/\//i.test(trimmed) || /^mailto:/i.test(trimmed);
 }
 
+// Used for <img src> only. An <img> can't execute navigation the way a
+// link can, so this is deliberately permissive — it accepts http(s),
+// protocol-relative ("//cdn.site.com/x.jpg"), data: URLs, and ordinary
+// relative paths, and only blocks the genuinely dangerous script-execution
+// schemes. Previously this reused the strict isSafeUrl() check above,
+// which silently dropped any pasted image whose src wasn't a bare
+// http(s)/mailto URL — protocol-relative URLs and lazy-load attributes
+// (both extremely common when copying a real webpage) got the image
+// deleted entirely with no fallback, even though the image itself is
+// harmless to render.
+function isAcceptableImageSrc(src: string): boolean {
+  const trimmed = src.trim();
+  if (!trimmed) return false;
+  return !/^(javascript|vbscript):/i.test(trimmed);
+}
+
+// Normalizes a protocol-relative URL ("//cdn.site.com/x.jpg") to https,
+// so it actually resolves instead of depending on the current page's
+// protocol by accident.
+function normalizeImageSrc(src: string): string {
+  const trimmed = src.trim();
+  if (trimmed.startsWith('//')) return `https:${trimmed}`;
+  return trimmed;
+}
+
+// Pulls the first URL out of a srcset="a.jpg 1x, b.jpg 2x" style value.
+function firstFromSrcset(srcset: string): string {
+  const first = (srcset.split(',')[0] || '').trim();
+  return first.split(/\s+/)[0] || '';
+}
+
+// Many real websites lazy-load images, so the "src" attribute is often a
+// tiny placeholder while the real URL lives in one of several possible
+// data-* attributes or in srcset. This checks all the common ones and
+// uses whichever actually has a value.
+function resolveImgSrc(el: HTMLElement): string {
+  const candidates = [
+    el.getAttribute('src'),
+    el.getAttribute('data-src'),
+    el.getAttribute('data-original'),
+    el.getAttribute('data-lazy-src'),
+    el.getAttribute('srcset') ? firstFromSrcset(el.getAttribute('srcset') || '') : null,
+    el.getAttribute('data-srcset') ? firstFromSrcset(el.getAttribute('data-srcset') || '') : null,
+  ];
+  return (candidates.find(c => c && c.trim()) || '').trim();
+}
+
+function detectAlign(el: HTMLElement | null): 'left' | 'right' | 'center' {
+  if (!el) return 'center';
+  const style = el.getAttribute('style') || '';
+  if (/float\s*:\s*left/i.test(style)) return 'left';
+  if (/float\s*:\s*right/i.test(style)) return 'right';
+  const cls = (el.getAttribute('class') || '').toLowerCase();
+  if (/\balignleft\b/.test(cls) || /(?:^|\s)left(?:\s|$)/.test(cls)) return 'left';
+  if (/\balignright\b/.test(cls) || /(?:^|\s)right(?:\s|$)/.test(cls)) return 'right';
+  return 'center';
+}
+
+function extractYouTubeId(url: string): string | null {
+  try {
+    const u = new URL(url, 'https://dummy-base.invalid');
+    if (/(^|\.)youtube\.com$/i.test(u.hostname)) {
+      if (u.pathname.startsWith('/embed/')) return u.pathname.split('/embed/')[1]?.split(/[/?]/)[0] || null;
+      return u.searchParams.get('v');
+    }
+    if (/(^|\.)youtu\.be$/i.test(u.hostname)) return u.pathname.slice(1).split(/[/?]/)[0] || null;
+  } catch {}
+  return null;
+}
+function extractVimeoId(url: string): string | null {
+  try {
+    const u = new URL(url, 'https://dummy-base.invalid');
+    if (/(^|\.)vimeo\.com$/i.test(u.hostname)) {
+      const m = u.pathname.match(/(\d{4,12})/);
+      return m ? m[1] : null;
+    }
+  } catch {}
+  return null;
+}
+
 type Fmt = { bold: boolean; italic: boolean; underline: boolean };
 type Line = { html: string; tag: 'p' | 'h2' | 'h3' | 'li-ul' | 'li-ol' | 'blockquote' };
 
-/**
- * Walks the pasted DOM and produces ONE output line per source block-level
- * element (p, div, h1-h6, li, tr) — never merging separate source
- * paragraphs together, and never guessing that a short bold line should
- * become a heading. What was a paragraph in the source stays a paragraph.
- * What was a heading tag in the source stays a heading. Bold/italic/
- * underline/links are preserved wherever they were actually applied.
- */
 function extractLines(root: Node): Line[] {
   const lines: Line[] = [];
   let current: string[] = [];
@@ -73,6 +147,37 @@ function extractLines(root: Node): Line[] {
     if (tag === 'SCRIPT' || tag === 'STYLE') return;
     if (tag === 'BR') { current.push('<br>'); return; }
 
+    if (tag === 'IMG') {
+      const rawSrc = resolveImgSrc(el);
+      if (!rawSrc || !isAcceptableImageSrc(rawSrc)) return;
+      const src = normalizeImageSrc(rawSrc);
+      const alt = escapeHtml(el.getAttribute('alt') || '');
+      const ownAlign = detectAlign(el);
+      const align = ownAlign !== 'center' ? ownAlign : detectAlign(el.parentElement);
+      const alignClass = align === 'left' ? 'rte-img-left' : align === 'right' ? 'rte-img-right' : 'rte-img-center';
+      current.push(`<img src="${escapeHtml(src)}" alt="${alt}" class="${alignClass}" />`);
+      pushLine('p');
+      return;
+    }
+
+    if (tag === 'IFRAME' || tag === 'VIDEO') {
+      const src = (
+        el.getAttribute('src') ||
+        el.querySelector('source')?.getAttribute('src') ||
+        ''
+      ).trim();
+      const ytId = extractYouTubeId(src);
+      const vimeoId = !ytId ? extractVimeoId(src) : null;
+      if (ytId) {
+        current.push(`<div class="rte-embed-youtube" data-video-id="${escapeHtml(ytId)}"></div>`);
+        pushLine('p');
+      } else if (vimeoId) {
+        current.push(`<div class="rte-embed-vimeo" data-video-id="${escapeHtml(vimeoId)}"></div>`);
+        pushLine('p');
+      }
+      return;
+    }
+
     if (tag === 'UL' || tag === 'OL') {
       const liTag: Line['tag'] = tag === 'UL' ? 'li-ul' : 'li-ol';
       el.querySelectorAll(':scope > li').forEach(li => {
@@ -94,17 +199,13 @@ function extractLines(root: Node): Line[] {
     }
 
     const isHeadingTag = HEADING_TAGS.has(tag);
-    // Google Docs / Word often express bold/italic/underline via an
-    // inline style attribute (e.g. <span style="font-style:italic">)
-    // rather than a semantic <b>/<i>/<u> tag — checking only tag names
-    // silently dropped that formatting on paste. This checks both.
     const style = el.getAttribute('style') || '';
     const styleBold = /font-weight\s*:\s*(bold|[6-9]\d\d)/i.test(style);
     const styleItalic = /font-style\s*:\s*italic/i.test(style);
     const styleUnderline = /text-decoration[^:;]*:[^;]*underline/i.test(style);
     const newFmt: Fmt = {
       bold: fmt.bold || tag === 'B' || tag === 'STRONG' || styleBold,
-      italic: fmt.italic || tag === 'I' || tag === 'EM' || styleItalic,
+      italic: fmt.italic || tag === 'I' || tag === 'EM' || tag === 'FIGCAPTION' || styleItalic,
       underline: fmt.underline || tag === 'U' || styleUnderline,
     };
     const isBlock = BLOCK_TAGS.has(tag);
@@ -113,8 +214,6 @@ function extractLines(root: Node): Line[] {
 
     if (isBlock) {
       if (isHeadingTag) {
-        // Preserve the source's actual heading level; only H1/H2 map to H2,
-        // everything H3 and deeper maps to H3 (the two levels this editor supports).
         pushLine(tag === 'H1' || tag === 'H2' ? 'h2' : 'h3');
       } else if (tag === 'BLOCKQUOTE') {
         pushLine('blockquote');
@@ -125,7 +224,7 @@ function extractLines(root: Node): Line[] {
   }
 
   walk(root, { bold: false, italic: false, underline: false });
-  pushLine('p'); // flush any trailing content that wasn't inside a block element
+  pushLine('p');
 
   return lines;
 }
@@ -166,10 +265,6 @@ function cleanPastedHtml(html: string): string {
   return buildContent(lines);
 }
 
-// Plain-text fallback (e.g. pasting from a source with no HTML at all,
-// like a plain .txt file or terminal). Every single line break becomes its
-// own paragraph — we don't merge lines, and we don't require a blank line
-// between them, so paragraph breaks are preserved exactly as typed.
 function plainTextToParagraphs(text: string): string {
   const normalized = text.replace(/\r\n/g, '\n').replace(/\u00A0/g, ' ');
   const lines = normalized.split('\n').map(l => l.replace(/[ \t]+/g, ' ').trim());
@@ -181,10 +276,23 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   onChange: (html: string) => void;
   placeholder?: string;
 }) {
+  const { admin } = useAdminAuth();
   const editorRef = useRef<HTMLDivElement>(null);
   const savedRangeRef = useRef<Range | null>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const replaceImageInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingReplace, setUploadingReplace] = useState(false);
 
-  // Set initial content once only
+  // Click-to-select image toolbar (Replace / Remove) — mirrors the pattern
+  // from the simpler editor, wired into the same Cloudinary upload
+  // endpoint the toolbar's "Image" button already uses. Previously
+  // clicking an image already in the body did nothing at all, so once an
+  // image was inserted (pasted or uploaded) there was no way to get rid
+  // of it short of unreliable manual selection inside contentEditable.
+  const activeImgRef = useRef<HTMLImageElement | null>(null);
+  const [imgToolbarPos, setImgToolbarPos] = useState<{ top: number; left: number } | null>(null);
+
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && value) {
       editorRef.current.innerHTML = sanitizeHtml(value);
@@ -254,6 +362,113 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   };
 
+  const uploadImageFile = async (file: File): Promise<string> => {
+    const fd = new FormData();
+    fd.append('image', file);
+    const res = await fetch(`${API_URL}/uploads/image`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${admin?.token || ''}` },
+      body: fd,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'Image upload failed');
+    }
+    const data = await res.json();
+    if (!data.url || !isSafeUrl(data.url)) {
+      throw new Error('Upload succeeded but returned no usable URL.');
+    }
+    return data.url;
+  };
+
+  const handleImageButtonClick = () => {
+    saveSelection();
+    imageInputRef.current?.click();
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      window.alert('Please choose an image file.');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const url = await uploadImageFile(file);
+
+      editorRef.current?.focus();
+      restoreSelection();
+
+      const alt = escapeHtml(file.name.replace(/\.[a-z0-9]+$/i, ''));
+      document.execCommand(
+        'insertHTML',
+        false,
+        `<img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-center" />`
+      );
+
+      handleInput();
+    } catch (err: any) {
+      window.alert(err.message || 'Could not upload that image. Please try again.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // Clicking any image already in the body selects it and shows a small
+  // floating Replace/Remove toolbar right above it. Clicking anywhere
+  // else (including a different image) closes/moves it.
+  const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    if (target.tagName === 'IMG') {
+      const rect = target.getBoundingClientRect();
+      const parentRect = editorRef.current!.getBoundingClientRect();
+      activeImgRef.current = target as HTMLImageElement;
+      setImgToolbarPos({ top: rect.top - parentRect.top - 36, left: rect.left - parentRect.left });
+    } else {
+      activeImgRef.current = null;
+      setImgToolbarPos(null);
+    }
+  };
+
+  const handleReplaceClick = () => {
+    replaceImageInputRef.current?.click();
+  };
+
+  const handleReplaceFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeImgRef.current) return;
+
+    if (!file.type.startsWith('image/')) {
+      window.alert('Please choose an image file.');
+      return;
+    }
+
+    setUploadingReplace(true);
+    try {
+      const url = await uploadImageFile(file);
+      activeImgRef.current.src = url;
+      handleInput();
+    } catch (err: any) {
+      window.alert(err.message || 'Could not upload that image. Please try again.');
+    } finally {
+      setUploadingReplace(false);
+      setImgToolbarPos(null);
+      activeImgRef.current = null;
+    }
+  };
+
+  const handleRemoveImage = () => {
+    activeImgRef.current?.remove();
+    activeImgRef.current = null;
+    setImgToolbarPos(null);
+    handleInput();
+  };
+
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
 
@@ -271,49 +486,97 @@ export function RichTextEditor({ value, onChange, placeholder }: {
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-200 focus-within:border-red-400 focus-within:ring-1 focus-within:ring-red-400">
-      {/* Toolbar */}
       <div className="flex flex-wrap gap-0.5 border-b border-gray-100 bg-gray-50 p-1.5">
         {TOOLS.map((t) => (
           <button
             key={t.cmd}
             type="button"
             title={t.title}
+            disabled={(t as any).isImage && uploadingImage}
             onMouseDown={(e) => {
               e.preventDefault();
               if ((t as any).isLink)   { handleLink();   return; }
               if ((t as any).isUnlink) { handleUnlink(); return; }
+              if ((t as any).isImage)  { handleImageButtonClick(); return; }
               exec(t.cmd, (t as any).isBlock);
             }}
-            className="min-w-[36px] rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-white hover:text-gray-900 hover:shadow-sm"
-            dangerouslySetInnerHTML={{ __html: t.icon }}
+            className="min-w-[36px] rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-white hover:text-gray-900 hover:shadow-sm disabled:opacity-50"
+            dangerouslySetInnerHTML={{
+              __html: (t as any).isImage && uploadingImage ? '⏳ Uploading…' : t.icon,
+            }}
           />
         ))}
+        <input
+          ref={imageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageSelect}
+        />
+        <input
+          ref={replaceImageInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleReplaceFileChosen}
+        />
       </div>
 
-      {/* Editor area */}
-      <div
-        ref={editorRef}
-        contentEditable
-        suppressContentEditableWarning
-        onInput={handleInput}
-        onBlur={() => { handleInput(); saveSelection(); }}
-        onMouseUp={saveSelection}
-        onKeyUp={saveSelection}
-        onPaste={handlePaste}
-        data-placeholder={placeholder || 'Write or paste article content here...'}
-        style={{ resize: 'vertical', overflow: 'auto', minHeight: '220px' }}
-        className="block w-full px-4 py-3 text-sm text-gray-800 outline-none
-          [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-gray-900
-          [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-gray-800
-          [&_b]:font-bold [&_strong]:font-bold
-          [&_i]:italic [&_em]:italic
-          [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-300 [&_a]:underline-offset-2
-          [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
-          [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
-          [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:my-3 [&_blockquote]:italic [&_blockquote]:text-gray-600
-          [&_li]:mb-1 [&_p]:mb-2 [&_p]:leading-relaxed
-          empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
-      />
+      <div className="relative">
+        <div
+          ref={editorRef}
+          contentEditable
+          suppressContentEditableWarning
+          onInput={handleInput}
+          onBlur={() => { handleInput(); saveSelection(); }}
+          onMouseUp={saveSelection}
+          onKeyUp={saveSelection}
+          onPaste={handlePaste}
+          onClick={handleEditorClick}
+          data-placeholder={placeholder || 'Write or paste article content here...'}
+          style={{ resize: 'vertical', overflow: 'auto', minHeight: '220px' }}
+          className="block w-full px-4 py-3 text-sm text-gray-800 outline-none
+            [&_h2]:text-xl [&_h2]:font-bold [&_h2]:mt-3 [&_h2]:mb-1 [&_h2]:text-gray-900
+            [&_h3]:text-lg [&_h3]:font-semibold [&_h3]:mt-2 [&_h3]:mb-1 [&_h3]:text-gray-800
+            [&_b]:font-bold [&_strong]:font-bold
+            [&_i]:italic [&_em]:italic
+            [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-300 [&_a]:underline-offset-2
+            [&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2
+            [&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2
+            [&_blockquote]:border-l-4 [&_blockquote]:border-gray-300 [&_blockquote]:pl-4 [&_blockquote]:my-3 [&_blockquote]:italic [&_blockquote]:text-gray-600
+            [&_li]:mb-1 [&_p]:mb-2 [&_p]:leading-relaxed
+            [&_img]:cursor-pointer
+            [&_img:hover]:ring-2 [&_img:hover]:ring-indigo-300
+            [&_img.rte-img-left]:float-left [&_img.rte-img-left]:mr-4 [&_img.rte-img-left]:mb-3 [&_img.rte-img-left]:max-w-[45%] [&_img.rte-img-left]:rounded-lg [&_img.rte-img-left]:h-auto
+            [&_img.rte-img-right]:float-right [&_img.rte-img-right]:ml-4 [&_img.rte-img-right]:mb-3 [&_img.rte-img-right]:max-w-[45%] [&_img.rte-img-right]:rounded-lg [&_img.rte-img-right]:h-auto
+            [&_img.rte-img-center]:block [&_img.rte-img-center]:mx-auto [&_img.rte-img-center]:my-3 [&_img.rte-img-center]:max-w-full [&_img.rte-img-center]:rounded-lg [&_img.rte-img-center]:h-auto
+            [&_.rte-embed-youtube]:my-3 [&_.rte-embed-youtube]:flex [&_.rte-embed-youtube]:h-28 [&_.rte-embed-youtube]:items-center [&_.rte-embed-youtube]:justify-center [&_.rte-embed-youtube]:rounded-lg [&_.rte-embed-youtube]:border [&_.rte-embed-youtube]:border-red-200 [&_.rte-embed-youtube]:bg-red-50 [&_.rte-embed-youtube]:text-xs [&_.rte-embed-youtube]:font-semibold [&_.rte-embed-youtube]:text-red-500 [&_.rte-embed-youtube]:before:content-['▶_YouTube_video_attached']
+            [&_.rte-embed-vimeo]:my-3 [&_.rte-embed-vimeo]:flex [&_.rte-embed-vimeo]:h-28 [&_.rte-embed-vimeo]:items-center [&_.rte-embed-vimeo]:justify-center [&_.rte-embed-vimeo]:rounded-lg [&_.rte-embed-vimeo]:border [&_.rte-embed-vimeo]:border-blue-200 [&_.rte-embed-vimeo]:bg-blue-50 [&_.rte-embed-vimeo]:text-xs [&_.rte-embed-vimeo]:font-semibold [&_.rte-embed-vimeo]:text-blue-500 [&_.rte-embed-vimeo]:before:content-['▶_Vimeo_video_attached']
+            empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
+        />
+
+        {imgToolbarPos && (
+          <div
+            className="absolute z-10 flex gap-1 rounded-lg border border-gray-200 bg-white px-1.5 py-1 shadow-md"
+            style={{ top: imgToolbarPos.top, left: imgToolbarPos.left }}
+          >
+            <button
+              onClick={handleReplaceClick}
+              disabled={uploadingReplace}
+              className="rounded px-2 py-1 text-xs font-semibold text-indigo-600 hover:bg-indigo-50 disabled:opacity-50"
+            >
+              {uploadingReplace ? 'Uploading…' : 'Replace'}
+            </button>
+            <button
+              onClick={handleRemoveImage}
+              disabled={uploadingReplace}
+              className="rounded px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              Remove
+            </button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
