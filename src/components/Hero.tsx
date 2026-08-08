@@ -120,39 +120,47 @@ export function Hero() {
     return () => clearInterval(t);
   }, [slides.length]);
 
-  if (loading) return <div className="h-[520px] animate-pulse bg-slate-900" />;
+  // Shorter skeleton height to match the new compact hero.
+  if (loading) return <div className="h-[320px] animate-pulse bg-slate-900" />;
   if (!slides.length) return null;
   const slide = slides[current];
 
   return (
     <section className="relative overflow-hidden bg-[#0c1726]">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-40 top-0 h-96 w-96 rounded-full bg-blue-900/30 blur-[120px]" />
-        <div className="absolute -right-40 bottom-0 h-96 w-96 rounded-full bg-indigo-900/20 blur-[120px]" />
+        <div className="absolute -left-40 top-0 h-72 w-72 rounded-full bg-blue-900/30 blur-[100px]" />
+        <div className="absolute -right-40 bottom-0 h-72 w-72 rounded-full bg-indigo-900/20 blur-[100px]" />
       </div>
-      <div className="relative mx-auto max-w-7xl px-4 py-12 lg:px-6 lg:py-16">
-        <div className="grid items-center gap-10 lg:grid-cols-2">
+      {/* Reduced vertical padding (py-8/py-10 vs the old py-12/py-16) —
+          this alone is most of what makes the section shorter, since the
+          grid height otherwise just follows its tallest child. */}
+      <div className="relative mx-auto max-w-7xl px-4 py-8 lg:px-6 lg:py-10">
+        <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-10">
           <div className="order-2 lg:order-1">
             {slide.badgeText && (
-              <span className="mb-5 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-1.5 text-[11px] font-black uppercase tracking-[0.3em] text-amber-300">
+              <span className="mb-3 inline-block rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.25em] text-amber-300">
                 {slide.badgeText}
               </span>
             )}
-            <h1 className="text-3xl font-black leading-tight text-white lg:text-[2.6rem] lg:leading-[1.1]">
+            {/* Headline dropped from text-3xl/2.6rem to text-xl/2rem — reads
+                as a news headline, not a hero/landing-page statement. */}
+            <h1 className="text-xl font-black leading-snug text-white lg:text-[2rem] lg:leading-[1.2]">
               {slide.title}
             </h1>
             {slide.subtitle && (
-              <p className="mt-4 text-base leading-relaxed text-slate-300 lg:text-lg">{slide.subtitle}</p>
+              <p className="mt-2.5 text-sm leading-relaxed text-slate-300 lg:text-base line-clamp-2">
+                {slide.subtitle}
+              </p>
             )}
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-5 flex flex-wrap gap-3">
               <Link to={slide.ctaLink}
-                className="rounded-full bg-amber-400 px-7 py-3 text-sm font-black text-slate-900 transition hover:bg-amber-300 hover:shadow-lg hover:shadow-amber-400/20">
+                className="rounded-full bg-amber-400 px-6 py-2.5 text-sm font-black text-slate-900 transition hover:bg-amber-300 hover:shadow-lg hover:shadow-amber-400/20">
                 Read More
               </Link>
             </div>
           </div>
           <div className="order-1 lg:order-2">
-            <div className="relative overflow-hidden rounded-2xl shadow-2xl shadow-black/60">
+            <div className="relative overflow-hidden rounded-xl shadow-2xl shadow-black/60">
               {slide.mediaType === 'youtube' && slide.youtubeId ? (
                 <div className="aspect-video">
                   <iframe
@@ -163,13 +171,14 @@ export function Hero() {
                   />
                 </div>
               ) : slide.mediaUrl ? (
-                // Cloudinary-optimized: hero media is the single largest
-                // image on the whole homepage — worth the biggest win here.
+                // Cloudinary-optimized. Height capped noticeably lower than
+                // before (was 440/260) so the image reads as an article
+                // thumbnail-scale photo, not a full hero banner.
                 <img
-                  src={cld(slide.mediaUrl, 1000)}
+                  src={cld(slide.mediaUrl, 800)}
                   alt={slide.title}
                   className="w-full object-cover"
-                  style={{ maxHeight: '440px', minHeight: '260px' }}
+                  style={{ maxHeight: '300px', minHeight: '180px' }}
                 />
               ) : (
                 <div className="flex aspect-video items-center justify-center bg-slate-800">
@@ -177,21 +186,21 @@ export function Hero() {
                 </div>
               )}
               {slide.previewCaption && (
-                <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 bg-black/70 px-4 py-2.5 backdrop-blur-sm">
-                  <span className="rounded bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-white">
+                <div className="absolute bottom-0 left-0 right-0 flex items-center gap-2 bg-black/70 px-3 py-2 backdrop-blur-sm">
+                  <span className="rounded bg-red-600 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-widest text-white">
                     {slide.isArticle ? 'Article' : 'Live Preview'}
                   </span>
-                  <p className="truncate text-xs text-white/80">{slide.previewCaption}</p>
+                  <p className="truncate text-[11px] text-white/80">{slide.previewCaption}</p>
                 </div>
               )}
             </div>
           </div>
         </div>
         {slides.length > 1 && (
-          <div className="mt-8 flex items-center justify-center gap-2">
+          <div className="mt-5 flex items-center justify-center gap-2">
             {slides.map((_, i) => (
               <button key={i} onClick={() => setCurrent(i)} aria-label={`Go to slide ${i + 1}`}
-                className={`rounded-full transition-all duration-300 ${i === current ? 'h-2.5 w-8 bg-amber-400' : 'h-2.5 w-2.5 bg-white/25 hover:bg-white/50'}`} />
+                className={`rounded-full transition-all duration-300 ${i === current ? 'h-2 w-6 bg-amber-400' : 'h-2 w-2 bg-white/25 hover:bg-white/50'}`} />
             ))}
           </div>
         )}
