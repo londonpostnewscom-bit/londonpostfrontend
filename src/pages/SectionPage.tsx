@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -13,6 +12,24 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const FEATURED_BATCH = 6;
 const GRID_BATCH = 4;
 const CROSS_POST_PAGES = ['world', 'editors-picks', 'in-focus'];
+
+// The public nav builds each section link by auto-slugifying its label
+// (lowercase, "&" -> "and", non-alphanumerics -> "-"). Most of the time
+// that matches the section's actual stored value exactly. But a few
+// sections in AdminAllPages.tsx were given a shorter/cleaner hand-picked
+// `value` that does NOT match what auto-slugifying their `label` would
+// produce — e.g. label "Art & Culture" auto-slugifies to
+// "art-and-culture", but the real stored value is "art-culture". When
+// that happens, the nav link and the admin's actual section value
+// silently disagree, the fetch below finds zero articles, and the page
+// looks empty even though articles genuinely exist. This maps every
+// known mismatch back to the real section value.
+const SLUG_ALIASES: Record<string, string> = {
+  'art-and-culture': 'art-culture',
+  'diplomatic-horizon': 'diplomatic-corner',
+  'united-kingdom': 'uk',
+  'editor-s-picks': 'editors-picks',
+};
 
 function slugify(s: string) {
   return s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
@@ -43,8 +60,13 @@ function toTitle(slug: string) {
 }
 
 export function SectionPage() {
-  const { slug = '' } = useParams();
-  const title = toTitle(slug);
+  const { slug: rawSlug = '' } = useParams();
+  // Use the alias-corrected slug for everything that talks to the backend
+  // or matches static data; keep the raw slug only for the display title,
+  // so a URL like /section/united-kingdom still shows "United Kingdom"
+  // instead of the shorter canonical value's title-cased form ("Uk").
+  const slug = SLUG_ALIASES[rawSlug] || rawSlug;
+  const title = toTitle(rawSlug);
 
   const [apiArticles, setApiArticles] = useState<Article[]>([]);
   const [apiLoaded, setApiLoaded] = useState(false);
