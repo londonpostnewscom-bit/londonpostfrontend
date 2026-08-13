@@ -1,6 +1,4 @@
 
-
-
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -8,28 +6,6 @@ import { Hero } from '../components/Hero';
 import { Article, articles as staticArticles } from '../data/siteData';
 import { PartnersMarquee } from '../components/PartnersMarquee';
 import { cld } from '../utils/Cloudinary';
-
-/* ─────────────────────────────────────────────────────────────────────
-   THEME — paste this into tailwind.config.js → theme.extend.colors.
-   This is the ONLY place the palette lives; every class below reads
-   from these five names, so retuning the brand later means editing
-   five hex values here, nothing else.
-
-     primary: '#16324F',  // deep navy   — structural: UK, Europe, links
-     accent:  '#B3231D',  // brand red   — investigative/urgent/live
-     gold:    '#C9932F',  // warm gold   — editorial voice: Opinion, Picks, Tashkent
-     lagoon:  '#1F6F6B',  // deep teal   — regional/forum: Interviews, C.Asia, TIIF
-     azure:   '#2E6F9E',  // sky blue    — Aviation (a deliberate nod: sky = azure)
-     ink:     '#0B1220',  // near-black, dark section backgrounds
-     soft:    '#F4F5F7',  // cool neutral grey, alternate section bg
-
-   Every section below now has its OWN layout grammar (not just its own
-   color) — a lead-and-rail briefing, a ranked countdown, a dossier
-   spread, a profile grid, a column of quotes, a carousel, a bento, a
-   ticket-stub split — the way BBC/CNN/FT vary composition section to
-   section, not just recolor the same card. All Tailwind classes below
-   are literal (never built at runtime) so the JIT scanner keeps them.
-   ───────────────────────────────────────────────────────────────────── */
 
 type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure';
 
@@ -67,17 +43,11 @@ const TONE: Record<Tone, {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-/* ─────────────────────────────────────────────────────────────────────
-   In-memory cache — lives for as long as this JS module is loaded, i.e.
-   the whole browser tab session. Navigating Home → Article → Home (SPA
-   routing) reuses this instantly, no re-fetch, no loading flash. An
-   actual page reload (F5) re-initializes the module, so the cache is
-   naturally gone and a fresh fetch happens.
-   ───────────────────────────────────────────────────────────────────── */
+type CaucasusFeed = { armenia: Article[]; georgia: Article[]; azerbaijan: Article[] };
 type HomeFeedData = {
   uk: Article[]; ep: Article[]; inf: Article[]; intv: Article[];
   vid: any[]; op: Article[]; ca: Article[]; eu: Article[]; ru: Article[];
-  dc: Article[]; tash: Article[]; tiif2026: Article[]; avi: Article[];
+  dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[];
 };
 let homeFeedCache: HomeFeedData | null = null;
 
@@ -100,6 +70,23 @@ function toArticle(a: any): Article {
   } as Article;
 }
 
+const MONTHS: Record<string, number> = {
+  january:0, february:1, march:2, april:3, may:4, june:5,
+  july:6, august:7, september:8, october:9, november:10, december:11,
+};
+function parseDate(input: string): number {
+  if (!input) return 0;
+  const s = input.trim();
+  const native = new Date(s);
+  if (!isNaN(native.getTime()) && /\d{4}/.test(s)) return native.getTime();
+  const lower = s.toLowerCase();
+  let m = lower.match(/([a-z]+)\D{0,3}(\d{1,2})\D{0,3}(\d{4})/);
+  if (m && MONTHS[m[1]] !== undefined) return new Date(+m[3], MONTHS[m[1]], +m[2]).getTime();
+  m = lower.match(/(\d{1,2})\D{0,3}([a-z]+)\D{0,3}(\d{4})/);
+  if (m && MONTHS[m[2]] !== undefined) return new Date(+m[3], MONTHS[m[2]], +m[1]).getTime();
+  return 0;
+}
+
 async function fetchSectionHome(section: string, limit = 4): Promise<any[]> {
   try {
     const r = await fetch(`${API_URL}/section-articles/home/${section}?limit=${limit}`);
@@ -109,8 +96,20 @@ async function fetchSectionHome(section: string, limit = 4): Promise<any[]> {
   } catch { return []; }
 }
 
+async function fetchRegionSubcategory(area: string, subCategory: string, limit = 4): Promise<Article[]> {
+  try {
+    const r = await fetch(`${API_URL}/region-articles/region/${area}?subCategory=${subCategory}`);
+    if (!r.ok) return [];
+    const data = await r.json();
+    return data
+      .map(toArticle)
+      .sort((a: Article, b: Article) => parseDate(b.date) - parseDate(a.date))
+      .slice(0, limit);
+  } catch { return []; }
+}
+
 async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
-  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, tiif2026, avi] = await Promise.all([
+  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi] = await Promise.all([
     fetchSectionHome('uk', 4),
     fetchSectionHome('editors-picks', 4),
     fetchSectionHome('in-focus', 4),
@@ -122,10 +121,12 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
     fetchSectionHome('russia-home', 5),
     fetchSectionHome('diplomatic-corner', 8),
     fetchSectionHome('tashkent', 5),
-    fetchSectionHome('tiif-2026', 5),
+    fetchRegionSubcategory('caucasus', 'armenia', 4),
+    fetchRegionSubcategory('caucasus', 'georgia', 4),
+    fetchRegionSubcategory('caucasus', 'azerbaijan', 4),
     fetchSectionHome('aviation', 5),
   ]);
-  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, tiif2026, avi };
+  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi };
 }
 
 function getYtThumb(videoId: string) {
@@ -134,42 +135,46 @@ function getYtThumb(videoId: string) {
 
 const DARK_BG = 'bg-ink';
 
-/* ─── Shared, tone-aware building blocks ───────────────────────────── */
-
 function CenterHeader({
-  title, description, action, dark = false, tone = 'crimson',
+  title, description, action, dark = false, tone = 'crimson', titleTo,
 }: {
-  title: string; description?: string; action?: React.ReactNode; dark?: boolean; tone?: Tone;
+  title: string; description?: string; action?: React.ReactNode; dark?: boolean; tone?: Tone; titleTo?: string;
 }) {
   const t = TONE[tone];
   return (
     <div className="mb-10 text-center">
       <div className={`mx-auto h-[3px] w-9 rounded-full ${t.tick}`} />
       <h2 className={`mt-4 text-[1.75rem] font-extrabold tracking-tight lg:text-[2.25rem] ${dark ? 'text-white' : 'text-ink'}`}>
-        {title}
+        {titleTo ? (
+          <Link to={titleTo} className={`group inline-flex items-center gap-2 transition ${t.hoverText}`}>
+            {title}
+            <span className="text-[0.6em] opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100">→</span>
+          </Link>
+        ) : title}
       </h2>
-   
-     
       {action && <div className="mt-6">{action}</div>}
     </div>
   );
 }
 
-/* Left-aligned variant — used by Tashkent & Aviation for rhythm: not
-   every section on a real front page is centered, and mixing a centered
-   masthead style with a left-aligned "section front" style is itself
-   how BBC/CNN vary section headers across one homepage. */
 function SideHeader({
-  title, action, dark = false, tone = 'gold',
+  title, action, dark = false, tone = 'gold', titleTo,
 }: {
-  title: string; action?: React.ReactNode; dark?: boolean; tone?: Tone;
+  title: string; action?: React.ReactNode; dark?: boolean; tone?: Tone; titleTo?: string;
 }) {
   const t = TONE[tone];
   return (
     <div className={`mb-10 flex flex-wrap items-end justify-between gap-4 border-b pb-6 ${dark ? 'border-white/10' : 'border-slate-200'}`}>
       <div className="flex items-center gap-3">
         <span className={`h-9 w-[3px] rounded-full ${t.tick}`} />
-        <h2 className={`text-[1.9rem] font-extrabold tracking-tight lg:text-4xl ${dark ? 'text-white' : 'text-ink'}`}>{title}</h2>
+        <h2 className={`text-[1.9rem] font-extrabold tracking-tight lg:text-4xl ${dark ? 'text-white' : 'text-ink'}`}>
+          {titleTo ? (
+            <Link to={titleTo} className={`group inline-flex items-center gap-2 transition ${t.hoverText}`}>
+              {title}
+              <span className="text-[0.55em] opacity-0 transition group-hover:translate-x-1 group-hover:opacity-100">→</span>
+            </Link>
+          ) : title}
+        </h2>
       </div>
       {action && <div className="hidden sm:block">{action}</div>}
     </div>
@@ -229,13 +234,6 @@ function ArrowCarousel({ items, renderCard, tone = 'crimson' }: { items: any[]; 
   );
 }
 
-/* A single text row with an optional thumbnail and optional rank
-   numeral. This is the workhorse for every "rail" / "sidebar" list in
-   the page. Crucially it NEVER lives inside a fixed-height box — each
-   row is exactly as tall as its own content, so a rail with one item
-   looks intentional and a rail with four looks intentional; nothing
-   stretches to match a neighboring hero image the way the old Russia
-   sidebar did. */
 function ListRow({
   article, tone = 'crimson', dark = false, index, showThumb = true, divider = true,
 }: {
@@ -268,12 +266,6 @@ function ListRow({
   );
 }
 
-/* A lead story rendered as a single horizontal card: image on one side,
-   text on the other, within ONE card frame. This is the fix for the
-   old Russia layout — the image is bounded to a fraction of the card's
-   width instead of running full-bleed edge to edge, so the card's
-   overall height is driven by its content, not by an oversized photo,
-   and a sparse sidebar next to it never reads as "empty space." */
 function LeadHorizontalCard({
   article, tone = 'crimson', imageSide = 'left', imageWidth = 'sm:w-[42%]', big = false,
 }: {
@@ -303,7 +295,6 @@ function LeadHorizontalCard({
   );
 }
 
-/* ─── Skeleton loading state — shown only on a genuinely cold load ─── */
 function Shimmer({ className = '' }: { className?: string }) {
   return <div className={`animate-pulse rounded-lg bg-slate-200/70 ${className}`} />;
 }
@@ -333,19 +324,12 @@ function HomeSkeleton() {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 1 — United Kingdom
-   Concept: "Briefing" — one dominant lead story (image+text in a single
-   card, BBC top-story style) with a text-forward rail of secondary
-   stories beside it. The rail carries small thumbnails, no numerals
-   (numerals would imply ranking, and these are simply "also today").
-   ═══════════════════════════════════════════════════════════════════ */
 function UKSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
   return (
     <section className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
-      <CenterHeader tone="navy" title="United Kingdom"
+      <CenterHeader tone="navy" title="United Kingdom" titleTo="/section/uk"
         description="Latest analysis, policy coverage and reporting from the United Kingdom." />
       <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
         <LeadHorizontalCard article={lead} tone="navy" imageWidth="sm:w-1/2" big />
@@ -365,20 +349,13 @@ function UKSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 2 — Editor's Picks
-   Concept: "Countdown" — this is genuinely a ranked shortlist curated
-   by editors, so numerals are honest here (unlike a generic grid).
-   #1 gets a full-bleed feature card with a giant ghost numeral; 2–4
-   sit in a numbered rail beside it.
-   ═══════════════════════════════════════════════════════════════════ */
 function EditorsPicksSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [top, ...rest] = articles;
   return (
     <section className="bg-soft py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader tone="gold" title="Editor's Picks"
+        <CenterHeader tone="gold" title="Editor's Picks" titleTo="/section/editors-picks"
           description="Hand-selected stories from our editorial team — the most important reads this week." />
         <div className="grid gap-6 xl:grid-cols-[1.35fr,1fr]">
           <Link to={`/article/${top.id}`} className="group relative overflow-hidden rounded-xl border border-gold/20 shadow-sm">
@@ -411,19 +388,12 @@ function EditorsPicksSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 3 — In Focus
-   Concept: "Dossier" — a lead investigation card stamped like a case
-   file, with three supporting analyses filed beside it under a
-   file-index eyebrow (F.02 / F.03 / F.04). The index here communicates
-   something real: these are the accompanying documents to the lead.
-   ═══════════════════════════════════════════════════════════════════ */
 function InFocusSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
   return (
     <section className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
-      <CenterHeader tone="crimson" title="In Focus"
+      <CenterHeader tone="crimson" title="In Focus" titleTo="/section/in-focus"
         description="Deep dives and long-form analysis on the stories that demand closer attention." />
       <div className="grid gap-6 lg:grid-cols-3">
         <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-accent/15 lg:col-span-2">
@@ -459,18 +429,16 @@ function InFocusSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 4 — Interviews
-   Concept: "Profile Wall" — dark, portrait-oriented cards on a gallery
-   wall, each carrying a large quotation glyph so the format reads as
-   "conversation" at a glance rather than generic news tiles.
-   ═══════════════════════════════════════════════════════════════════ */
+function PlayGlyph({ className = 'h-5 w-5' }: { className?: string }) {
+  return <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>;
+}
+
 function InterviewsSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader dark tone="lagoon" title="Interviews"
+        <CenterHeader dark tone="lagoon" title="Interviews" titleTo="/section/interviews"
           description="In-depth conversations with policymakers, analysts and global voices." />
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {articles.map(article => (
@@ -495,15 +463,6 @@ function InterviewsSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 5 — Watch & Learn
-   Concept: "Screening Room" — one large featured player (autoplay-style
-   hover), three secondary clips as a compact watch-next list.
-   ═══════════════════════════════════════════════════════════════════ */
-function PlayGlyph({ className = 'h-5 w-5' }: { className?: string }) {
-  return <svg className={className} fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>;
-}
-
 function VideoSection({ videos }: { videos: any[] }) {
   if (!videos.length) return null;
   const [feature, ...rest] = videos;
@@ -512,9 +471,8 @@ function VideoSection({ videos }: { videos: any[] }) {
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader dark tone="crimson" title="Watch & Learn"
-          description="Video reports, documentary clips and analysis from our global team."
-          action={<CoverageLink to="/section/video" label="All Videos" dark tone="crimson" />}
+        <CenterHeader dark tone="crimson" title="Watch & Learn" titleTo="/section/video"
+          
         />
         <div className="grid gap-6 lg:grid-cols-[1.5fr,1fr]">
           <Link to={`/video/${featureId}`} className="group relative overflow-hidden rounded-xl border border-accent/20">
@@ -560,21 +518,13 @@ function VideoSection({ videos }: { videos: any[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 6 — Opinion
-   Concept: "Column" — a true op-ed layout: a two-up list of bylined
-   pieces set in serif italic, separated by hairlines and a center
-   rule, the way a newspaper's op-ed page reads rather than a photo
-   grid (opinion pieces are about the writer's voice, not imagery).
-   ═══════════════════════════════════════════════════════════════════ */
 function OpinionSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className="bg-soft py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader tone="gold" title="Opinion"
-          description="Perspectives from analysts, contributors and thought leaders."
-          action={<CoverageLink to="/section/opinion" label="All Opinions" tone="gold" />}
+        <CenterHeader tone="gold" title="Opinion" titleTo="/section/opinion"
+        
         />
         <div className="mx-auto grid max-w-5xl divide-y divide-slate-200 sm:grid-cols-2 sm:divide-y-0">
           {articles.map((article, i) => (
@@ -594,20 +544,13 @@ function OpinionSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 7 — Central Asia
-   Concept: "Regional Dispatch" carousel — square-ish cards with a
-   colored top rule and a small "dispatch" tag, kept as a carousel
-   since this section can run long (8 items).
-   ═══════════════════════════════════════════════════════════════════ */
 function CentralAsiaSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader dark tone="lagoon" title="Central Asia Coverage"
-          description="Strategic reporting from Kazakhstan, Uzbekistan, Kyrgyzstan, Tajikistan and Turkmenistan."
-          action={<CoverageLink to="/region/asia/central-asia" dark tone="lagoon" />}
+        <CenterHeader dark tone="lagoon" title="Central Asia Coverage" titleTo="/region/asia/central-asia"
+          
         />
         <ArrowCarousel tone="lagoon" items={articles} renderCard={(article: Article) => (
           <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border-t-2 border-lagoon bg-lagoon/[0.06] transition hover:-translate-y-1 hover:bg-lagoon/[0.12]">
@@ -628,22 +571,14 @@ function CentralAsiaSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 8 — Europe
-   Concept: "Masthead spread" — a lead horizontal card plus a clean,
-   text-only briefing list (no thumbnails — deliberately quieter than
-   the UK/Russia rails so Europe doesn't visually repeat them). The
-   list only ever takes the height its own rows need.
-   ═══════════════════════════════════════════════════════════════════ */
 function EuropeSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
   return (
     <section className="bg-white py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader tone="navy" title="Europe"
-          description="Western, Eastern, Northern and Southern Europe — diplomacy, security and economics."
-          action={<CoverageLink to="/region/europe" label="All Europe" tone="navy" />}
+        <CenterHeader tone="navy" title="Europe" titleTo="/region/europe"
+          
         />
         {rest.length === 0 ? (
           <LeadHorizontalCard article={lead} tone="navy" imageWidth="sm:w-1/2" big />
@@ -663,17 +598,6 @@ function EuropeSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 9 — Russia
-   Concept: "Editorial spread" — THE FIX for the original layout.
-   The lead story is a single horizontal card (image capped to ~42% of
-   card width, not a full-bleed hero), so its height is set by its own
-   text, not by a stretched photo. The sidebar sits in its own card
-   that only grows to fit however many stories actually exist — with
-   `items-start` on the grid so it never stretches to match the lead's
-   height, and it collapses to full width gracefully when there's
-   nothing to show beside it.
-   ═══════════════════════════════════════════════════════════════════ */
 function RussiaSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
@@ -681,9 +605,8 @@ function RussiaSection({ articles }: { articles: Article[] }) {
   return (
     <section className="bg-soft py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader tone="crimson" title="Russia"
-          description="Strategic reporting, politics, diplomacy and economic coverage from Russia."
-          action={<CoverageLink to="/region/russia" label="All Russia" tone="crimson" />}
+        <CenterHeader tone="crimson" title="Russia" titleTo="/region/russia"
+         
         />
         {side.length === 0 ? (
           <LeadHorizontalCard article={lead} tone="crimson" imageWidth="sm:w-1/2" big />
@@ -703,7 +626,6 @@ function RussiaSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ─── Tashkent — dark, editorial split, numbered list, gold tone ─── */
 function TashkentSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const lead = articles[0];
@@ -732,7 +654,7 @@ function TashkentSection({ articles }: { articles: Article[] }) {
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <SideHeader dark tone="gold" title="Tashkent" action={<CoverageLink to="/section/tashkent" dark tone="gold" />} />
+        <SideHeader dark tone="gold" title="Tashkent" titleTo="/section/tashkent" action={<CoverageLink to="/section/tashkent" dark tone="gold" />} />
 
         {hasRest ? (
           <div className="grid gap-6 lg:grid-cols-[1.5fr,1fr]">
@@ -759,90 +681,49 @@ function TashkentSection({ articles }: { articles: Article[] }) {
         ) : LeadCard}
 
         <div className="mt-8 sm:hidden text-center">
-          <CoverageLink to="/section/tashkent" dark tone="gold" />
+         
         </div>
       </div>
     </section>
   );
 }
 
-/* ─── TIIF-2026 — dark bento mosaic, lagoon (teal) tone ─── */
-function TiifSection({ articles }: { articles: Article[] }) {
-  if (!articles.length) return null;
-  const [lead, ...rest] = articles;
-  const hasRest = rest.length > 0;
+function CaucasusSection({ armenia, georgia, azerbaijan }: { armenia: Article[]; georgia: Article[]; azerbaijan: Article[] }) {
+  const countries = [
+    { key: 'armenia', label: 'Armenia', articles: armenia, to: '/region/caucasus/armenia' },
+    { key: 'georgia', label: 'Georgia', articles: georgia, to: '/region/caucasus/georgia' },
+    { key: 'azerbaijan', label: 'Azerbaijan', articles: azerbaijan, to: '/region/caucasus/azerbaijan' },
+  ].filter(c => c.articles.length > 0);
+
+  if (countries.length === 0) return null;
 
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader
-          dark
-          tone="lagoon"
-          title="TIIF-2026"
-          description="Tashkent International Investment Forum 2026 — exclusive coverage, analysis and highlights."
-          action={<CoverageLink to="/section/tiif-2026" dark tone="lagoon" />}
+        <CenterHeader dark tone="lagoon" title="Caucasus Coverage" titleTo="/region/caucasus"
+          
+          
         />
-
-        {hasRest ? (
-          <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-            <Link to={`/article/${lead.id}`}
-              className="group relative overflow-hidden rounded-xl md:col-span-2 xl:col-span-1 xl:row-span-2">
-              <div className="aspect-[4/5] overflow-hidden xl:h-full">
-                {lead.image
-                  ? <img src={cld(lead.image, 900)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                  : <div className="h-full w-full bg-slate-800" />
-                }
-              </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent" />
-              <div className="absolute inset-x-0 bottom-0 p-6">
-                <CategoryTag category={lead.category} dark tone="lagoon" />
-                <h3 className="mt-2 text-xl font-bold text-white">{lead.title}</h3>
-                {lead.subtitle && <p className="mt-1.5 text-sm text-white/60 line-clamp-2">{lead.subtitle}</p>}
-                <p className="mt-3 text-xs text-white/40">{lead.author} · {lead.date}</p>
-              </div>
-            </Link>
-
-            {rest.slice(0, 4).map((article) => (
-              <Link key={article.id} to={`/article/${article.id}`}
-                className="group flex gap-4 overflow-hidden rounded-xl border border-lagoon/20 bg-lagoon/[0.06] p-4 transition hover:border-lagoon/40 hover:bg-lagoon/[0.12]">
-                {article.image && (
-                  <div className="aspect-square h-20 shrink-0 overflow-hidden rounded-lg">
-                    <img src={cld(article.image, 300)} alt={article.title} className="h-full w-full object-cover transition group-hover:scale-105" />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <CategoryTag category={article.category} dark tone="lagoon" />
-                  <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-snug text-white">{article.title}</h3>
-                  <p className="mt-1.5 text-xs text-slate-500">{article.author} · {article.date}</p>
-                </div>
+        <div className={`grid gap-6 ${countries.length === 1 ? '' : countries.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
+          {countries.map(c => (
+            <div key={c.key} className="rounded-xl border border-lagoon/20 bg-lagoon/[0.05] px-5 py-5">
+              <Link to={c.to} className="group mb-3 flex items-center justify-between border-b border-white/10 pb-3">
+                <h3 className="text-lg font-extrabold text-white transition group-hover:text-lagoon">{c.label}</h3>
+                <span className="text-lagoon transition group-hover:translate-x-1">→</span>
               </Link>
-            ))}
-          </div>
-        ) : (
-          /* Single-story fallback: a full-width feature card instead of a
-             narrow, tall bento tile stranded next to empty grid columns. */
-          <Link to={`/article/${lead.id}`} className="group relative block overflow-hidden rounded-xl">
-            <div className="aspect-[21/9] max-h-[420px] overflow-hidden">
-              {lead.image
-                ? <img src={cld(lead.image, 1400)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
-                : <div className="h-full w-full bg-slate-800" />
-              }
+              <div className="flex flex-col">
+                {c.articles.slice(0, 4).map(article => (
+                  <ListRow key={article.id} article={article} tone="lagoon" dark />
+                ))}
+              </div>
             </div>
-            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/25 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 p-6 lg:p-8">
-              <CategoryTag category={lead.category} dark tone="lagoon" />
-              <h3 className="mt-2 max-w-2xl text-2xl font-bold leading-tight text-white lg:text-3xl">{lead.title}</h3>
-              {lead.subtitle && <p className="mt-2 max-w-xl text-sm text-white/60 line-clamp-2">{lead.subtitle}</p>}
-              <p className="mt-3 text-xs text-white/40">{lead.author} · {lead.date}</p>
-            </div>
-          </Link>
-        )}
+          ))}
+        </div>
       </div>
     </section>
   );
 }
 
-/* ─── Aviation — white, hero+list, azure tone, ticket-stub divider ─── */
 function AviationSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [main, ...rest] = articles;
@@ -870,7 +751,7 @@ function AviationSection({ articles }: { articles: Article[] }) {
   return (
     <section className="bg-white py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <SideHeader tone="azure" title="Aviation" action={<CoverageLink to="/section/aviation" tone="azure" />} />
+        <SideHeader tone="azure" title="Aviation" titleTo="/section/aviation"  />
 
         {hasRest ? (
           <div className="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
@@ -899,19 +780,14 @@ function AviationSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION 13 — Diplomatic Corner
-   Concept: "Briefing Room" carousel — cards carry a wax-seal-style
-   circular emblem instead of a photo tag, evoking dispatches/treaties.
-   ═══════════════════════════════════════════════════════════════════ */
 function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader dark tone="navy" title="Diplomatic Corner"
-          description="In-depth diplomatic analysis, treaties, negotiations and foreign policy insights."
-          action={<CoverageLink to="/section/diplomatic-corner" dark tone="navy" />}
+        <CenterHeader dark tone="navy" title="Diplomatic Corner" titleTo="/section/diplomatic-corner"
+          
+         
         />
         <ArrowCarousel tone="navy" items={articles} renderCard={(article: Article) => (
           <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.08] transition hover:-translate-y-1 hover:bg-primary/[0.15]">
@@ -932,8 +808,6 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
     </section>
   );
 }
-
-/* ─── Main HomePage ─────────────────────────────────────────────────── */
 
 export function HomePage() {
   const staticUK      = useMemo(() => staticArticles.filter(a => a.region === 'United Kingdom').slice(0, 4), []);
@@ -976,7 +850,7 @@ export function HomePage() {
   const displayRussia   = feed.ru;
   const displayDiplo    = feed.dc;
   const displayTashkent = feed.tash;
-  const displayTiif     = feed.tiif2026;
+  const displayCaucasus = feed.cauc;
   const displayAviation = feed.avi;
 
   return (
@@ -998,7 +872,7 @@ export function HomePage() {
       <RussiaSection articles={displayRussia} />
 
       <TashkentSection articles={displayTashkent} />
-      <TiifSection articles={displayTiif} />
+      <CaucasusSection armenia={displayCaucasus.armenia} georgia={displayCaucasus.georgia} azerbaijan={displayCaucasus.azerbaijan} />
       <AviationSection articles={displayAviation} />
 
       <DiplomaticCornerSection articles={displayDiplo} />
