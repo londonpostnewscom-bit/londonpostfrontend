@@ -18,12 +18,22 @@ const REGION_META: Record<string, { label: string; description: string }> = {
   oceania:    { label: 'Oceania',     description: 'Australia, New Zealand and the Pacific Islands.' },
   africa:     { label: 'Africa',      description: 'North and Sub-Saharan Africa — governance and resources.' },
   americas:   { label: 'Americas',    description: 'North America, Latin America and the Caribbean.' },
-  caucasus:   { label: 'Caucasus',    description: 'Georgia, Armenia, Azerbaijan and the South Caucasus.' },
+  caucasus:   { label: 'Caucasus',    description: 'Armenia, Georgia and Azerbaijan — strategic and regional coverage.' },
   russia:     { label: 'Russia',      description: 'Strategic analysis and reporting on Russia.' },
 };
 
 const FEATURED_BATCH = 6;
 const GRID_BATCH = 4;
+
+// Per-(area + sub-category) in-memory cache — same pattern as
+// SectionPage.tsx and HomePage.tsx. Navigating Region A → Home →
+// Region A again (or switching between its category tabs and back)
+// reuses this instantly instead of re-fetching and re-showing a
+// loading state. Cleared naturally on a real page reload.
+const regionCache = new Map<string, Article[]>();
+function cacheKey(area: string, category: string | null) {
+  return `${area}::${category || ''}`;
+}
 
 function apiToArticle(a: any): Article {
   return {
@@ -43,6 +53,34 @@ function apiToArticle(a: any): Article {
   } as Article;
 }
 
+/* ─── Loading skeleton — shown only while genuinely fetching for the
+   first time; a cached revisit skips straight to real content. ─── */
+function Shimmer({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-lg bg-slate-200/70 ${className}`} />;
+}
+function RegionSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <Shimmer className="mb-3 h-4 w-32" />
+          <Shimmer className="mb-2 h-9 w-72" />
+          <Shimmer className="h-4 w-96" />
+        </div>
+        <div className="flex gap-2">
+          {Array.from({ length: 3 }).map((_, i) => <Shimmer key={i} className="h-9 w-24 rounded-full" />)}
+        </div>
+      </div>
+      <div className="mt-8 grid gap-8 xl:grid-cols-[1fr,300px]">
+        <div className="grid gap-6 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => <Shimmer key={i} className="h-64 w-full" />)}
+        </div>
+        <Shimmer className="hidden h-96 w-full xl:block" />
+      </div>
+    </div>
+  );
+}
+
 export function RegionPage() {
   const { area = 'asia', country } = useParams();
   const meta = REGION_META[area] || { label: area, description: '' };
@@ -50,8 +88,11 @@ export function RegionPage() {
   const hasCategories = categories.length > 0;
   const selectedCategory = categories.find((c: string) => slugify(c) === country) || null;
 
-  const [apiArticles, setApiArticles] = useState<Article[]>([]);
-  const [apiLoaded, setApiLoaded] = useState(false);
+  const key = cacheKey(area, selectedCategory);
+  const cached = regionCache.get(key);
+  const [apiArticles, setApiArticles] = useState<Article[]>(cached || []);
+  const [apiLoaded, setApiLoaded] = useState(!!cached);
+  const [loading, setLoading] = useState(!cached);
   const [filteredArchived, setFilteredArchived] = useState<Article[]>([]);
 
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
@@ -60,6 +101,16 @@ export function RegionPage() {
 
   useEffect(() => {
     let cancelled = false;
+
+    const hit = regionCache.get(key);
+    if (hit) {
+      setApiArticles(hit);
+      setApiLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setApiLoaded(false);
 
     let url = `${API_URL}/region-articles/region/${area}`;
@@ -69,13 +120,16 @@ export function RegionPage() {
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
         if (cancelled) return;
-        setApiArticles(data.map(apiToArticle));
+        const mapped = data.map(apiToArticle);
+        regionCache.set(key, mapped);
+        setApiArticles(mapped);
         setApiLoaded(true);
+        setLoading(false);
       })
-      .catch(() => { if (!cancelled) setApiLoaded(true); });
+      .catch(() => { if (!cancelled) { setApiLoaded(true); setLoading(false); } });
 
     return () => { cancelled = true; };
-  }, [area, selectedCategory]);
+  }, [area, selectedCategory, key]);
 
   useEffect(() => {
     setLatestVisible(GRID_BATCH);
@@ -94,7 +148,10 @@ export function RegionPage() {
     );
   }, [selectedCategory, meta.label, area, categories]);
 
-  const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : staticMatch;
+  // Static fallback only applies once the real fetch has finished and
+  // genuinely came back empty — not during the loading window, which now
+  // shows the skeleton instead of a flash of unrelated placeholder data.
+  const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : []);
 
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Recomputed only when the underlying article list actually changes,
@@ -121,6 +178,10 @@ export function RegionPage() {
   const canLoadMoreLatest   = latestVisible < latestAll.length;
   const canLoadMoreFeatured = featuredVisible < featuredAll.length;
   const canLoadMoreArchived = archivedVisible < filteredArchived.length;
+
+  if (loading) {
+    return <RegionSkeleton />;
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
