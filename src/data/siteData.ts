@@ -44,7 +44,7 @@ export const regionMenus: Record<string, string[]> = {
   oceania:    [],
   africa:     [],
   americas:   ['North America', 'Latin America & Caribbean', 'South America'],
-  caucasus:   [],
+ caucasus:   ['Armenia', 'Georgia', 'Azerbaijan'],
   russia:     [],
 };
 
