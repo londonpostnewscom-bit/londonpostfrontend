@@ -1,3 +1,5 @@
+
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -31,6 +33,13 @@ const SLUG_ALIASES: Record<string, string> = {
   'editor-s-picks': 'editors-picks',
 };
 
+// Per-slug in-memory cache — same pattern as HomePage's homeFeedCache and
+// ArticleDetailPage's articleCache. Lives for the browser tab session:
+// navigating Section A → Home → Section A again reuses this instantly
+// with no fetch and no loading flash. A real page reload (F5) clears it
+// naturally since the module re-initializes.
+const sectionCache = new Map<string, Article[]>();
+
 function slugify(s: string) {
   return s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 }
@@ -59,6 +68,27 @@ function toTitle(slug: string) {
   return slug.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()).replace('And', '&');
 }
 
+/* ─── Loading skeleton — shown only while genuinely fetching for the
+   first time; a cached revisit skips straight to real content. ─── */
+function Shimmer({ className = '' }: { className?: string }) {
+  return <div className={`animate-pulse rounded-lg bg-slate-200/70 ${className}`} />;
+}
+function SectionSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
+      <Shimmer className="mb-3 h-4 w-32" />
+      <Shimmer className="mb-2 h-9 w-72" />
+      <Shimmer className="mb-10 h-4 w-96" />
+      <div className="grid gap-8 xl:grid-cols-[1fr,300px]">
+        <div className="grid gap-6 sm:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, i) => <Shimmer key={i} className="h-64 w-full" />)}
+        </div>
+        <Shimmer className="hidden h-96 w-full xl:block" />
+      </div>
+    </div>
+  );
+}
+
 export function SectionPage() {
   const { slug: rawSlug = '' } = useParams();
   // Use the alias-corrected slug for everything that talks to the backend
@@ -68,8 +98,10 @@ export function SectionPage() {
   const slug = SLUG_ALIASES[rawSlug] || rawSlug;
   const title = toTitle(rawSlug);
 
-  const [apiArticles, setApiArticles] = useState<Article[]>([]);
-  const [apiLoaded, setApiLoaded] = useState(false);
+  const cached = sectionCache.get(slug);
+  const [apiArticles, setApiArticles] = useState<Article[]>(cached || []);
+  const [apiLoaded, setApiLoaded] = useState(!!cached);
+  const [loading, setLoading] = useState(!cached);
   const [filteredArchived, setFilteredArchived] = useState<Article[]>([]);
 
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
@@ -78,6 +110,16 @@ export function SectionPage() {
 
   useEffect(() => {
     let cancelled = false;
+
+    const hit = sectionCache.get(slug);
+    if (hit) {
+      setApiArticles(hit);
+      setApiLoaded(true);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
     setApiLoaded(false);
 
     fetch(
@@ -88,10 +130,13 @@ export function SectionPage() {
       .then((r) => r.ok ? r.json() : [])
       .then((data) => {
         if (cancelled) return;
-        setApiArticles(data.map(apiToArticle));
+        const mapped = data.map(apiToArticle);
+        sectionCache.set(slug, mapped);
+        setApiArticles(mapped);
         setApiLoaded(true);
+        setLoading(false);
       })
-      .catch(() => { if (!cancelled) setApiLoaded(true); });
+      .catch(() => { if (!cancelled) { setApiLoaded(true); setLoading(false); } });
 
     return () => { cancelled = true; };
   }, [slug]);
@@ -106,7 +151,14 @@ export function SectionPage() {
     return staticArticles.filter((a) => slugify(a.category) === slug || slugify(a.topic || '') === slug);
   }, [slug]);
 
-  const source = apiLoaded && apiArticles.length > 0 ? apiArticles : staticMatch;
+  // Static fallback data only ever applies AFTER the real fetch has
+  // finished and genuinely came back empty — never during the loading
+  // window itself. Previously this fell back to static/demo articles
+  // while still loading, which could flash unrelated placeholder content
+  // before the real data arrived; now that window shows the skeleton
+  // instead, and only settles on static data as a true "nothing here yet"
+  // fallback.
+  const source = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : []);
 
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Memoized so it only changes when the article list actually changes,
@@ -132,6 +184,10 @@ export function SectionPage() {
     // NOT a fresh array on every render — this is the fix for "Load More"
     // silently resetting itself.
   }, [slug, archivedAll]);
+
+  if (loading) {
+    return <SectionSkeleton />;
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
