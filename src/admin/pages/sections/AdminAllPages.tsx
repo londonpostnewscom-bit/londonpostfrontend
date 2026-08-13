@@ -14,7 +14,7 @@ const WORLD_REGIONS = [
   { value: 'americas',    label: 'Americas',      type: 'region' as const, subCategories: ['North America','Latin America & Caribbean','South America'], isVideo: false },
   { value: 'africa',      label: 'Africa',        type: 'region' as const, subCategories: [], isVideo: false },
   { value: 'russia',      label: 'Russia',        type: 'region' as const, subCategories: [], isVideo: false },
-  { value: 'caucasus',    label: 'Caucasus',      type: 'region' as const, subCategories: [], isVideo: false },
+  { value: 'caucasus', label: 'Caucasus', type: 'region' as const, subCategories: ['Armenia','Georgia','Azerbaijan'], isVideo: false },
   { value: 'oceania',     label: 'Oceania',       type: 'region' as const, subCategories: [], isVideo: false },
 ];
 
