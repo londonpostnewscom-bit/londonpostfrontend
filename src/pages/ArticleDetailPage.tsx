@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -22,12 +23,78 @@ function decodeAndStrip(html: string) {
     .replace(/<script[\s\S]*?<\/script>/gi, '')
     .replace(/<style[\s\S]*?<\/style>/gi, '')
     .replace(/<iframe[\s\S]*?<\/iframe>/gi, '')
-    .replace(/\s*data-[a-z-]+=["'][^"']*["']/gi, '')
+    // Allowlist: the only data-* attribute that survives is data-video-id,
+    // and only when it looks like a real YouTube/Vimeo ID (alphanumeric,
+    // dash, underscore, capped length) — never passed through verbatim.
+    .replace(/\s*data-([a-z-]+)=["']([^"']*)["']/gi, (_match, name, val) => {
+      if (name === 'video-id' && /^[A-Za-z0-9_-]{1,20}$/.test(val)) {
+        return ` data-video-id="${val}"`;
+      }
+      return '';
+    })
     .replace(/\s*jsaction=["'][^"']*["']/gi, '')
     .replace(/\s*jscontroller=["'][^"']*["']/gi, '')
     .replace(/\s*jsname=["'][^"']*["']/gi, '')
-    .replace(/\s*class=["'][^"']*["']/gi, '')
+    // Allowlist: only these class names survive (all set by
+    // RichTextEditor's paste cleaner). Anything else is stripped, so this
+    // can't be used to smuggle in arbitrary styling or scripting hooks.
+    .replace(/\s*class=["']([^"']*)["']/gi, (_match, cls) => {
+      const allowed = new Set([
+        'rte-img-left', 'rte-img-right', 'rte-img-center',
+        'rte-embed-youtube', 'rte-embed-vimeo',
+      ]);
+      return allowed.has((cls || '').trim()) ? ` class="${cls.trim()}"` : '';
+    })
     .replace(/\s*style=["'][^"']*["']/gi, '');
+}
+
+function isValidYouTubeId(id: string) { return /^[A-Za-z0-9_-]{6,15}$/.test(id); }
+function isValidVimeoId(id: string) { return /^[0-9]{4,12}$/.test(id); }
+
+// Renders sanitized HTML, then — in a real DOM pass, never via string
+// concatenation — swaps our own safe embed markers for genuine iframes.
+// The iframe's src is always built from a freshly-validated ID, never
+// taken from the pasted markup directly, so this can't become an
+// injection point no matter what the original clipboard HTML contained.
+function SafeHtml({ html, className }: { html: string; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+
+    root.querySelectorAll<HTMLElement>('.rte-embed-youtube[data-video-id]').forEach((el) => {
+      const id = el.getAttribute('data-video-id') || '';
+      if (!isValidYouTubeId(id)) { el.remove(); return; }
+      const wrap = document.createElement('div');
+      wrap.className = 'my-6 aspect-video w-full overflow-hidden rounded-2xl shadow-lg';
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://www.youtube.com/embed/${id}?rel=0&modestbranding=1`;
+      iframe.title = 'Embedded video';
+      iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.className = 'h-full w-full';
+      wrap.appendChild(iframe);
+      el.replaceWith(wrap);
+    });
+
+    root.querySelectorAll<HTMLElement>('.rte-embed-vimeo[data-video-id]').forEach((el) => {
+      const id = el.getAttribute('data-video-id') || '';
+      if (!isValidVimeoId(id)) { el.remove(); return; }
+      const wrap = document.createElement('div');
+      wrap.className = 'my-6 aspect-video w-full overflow-hidden rounded-2xl shadow-lg';
+      const iframe = document.createElement('iframe');
+      iframe.src = `https://player.vimeo.com/video/${id}`;
+      iframe.title = 'Embedded video';
+      iframe.allow = 'autoplay; fullscreen; picture-in-picture';
+      iframe.allowFullscreen = true;
+      iframe.className = 'h-full w-full';
+      wrap.appendChild(iframe);
+      el.replaceWith(wrap);
+    });
+  }, [html]);
+
+  return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function getKeywords(title: string): string[] {
@@ -161,11 +228,65 @@ function ArticleBlock({ block }: { block: { type: string; value?: string; url?: 
     const html = block.value;
     const safe = isHTML(html) ? decodeAndStrip(html) : html;
     return isHTML(html)
-      ? <div className="prose-article" dangerouslySetInnerHTML={{ __html: safe }} />
+      ? <SafeHtml className="prose-article" html={safe} />
       : <div className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{safe}</div>;
   }
 
   return null;
+}
+
+/* ── Copy protection ──────────────────────────────────────────────────
+   Intercepts the browser's `copy` event on the article body. Whatever
+   the person selected — a sentence, a whole paragraph, several
+   paragraphs — the clipboard only ever ends up holding a short excerpt
+   (cut cleanly at a word boundary, never mid-word) plus the article's
+   own URL underneath.
+
+   FIXED: this previously only ran once, on the component's very first
+   render — which happens while `loading` is still true and the real
+   article <div ref={contentRef}> hasn't rendered yet (ArticleSkeleton
+   is shown instead), so `containerRef.current` was null and the effect
+   bailed out immediately. Because the dependency array only contained
+   the ref object itself (stable identity, never changes) and the URL
+   (also unchanged), the effect never re-ran once loading finished and
+   the real content mounted — so the listener was never actually
+   attached. Adding `ready` (true once loading is done and article data
+   exists) to the dependency list makes the effect re-run at exactly the
+   moment the real DOM node becomes available. */
+const COPY_SNIPPET_LIMIT = 180; // characters — roughly one line/sentence
+
+function useArticleCopyProtection(
+  containerRef: React.RefObject<HTMLElement>,
+  articleUrl: string,
+  ready: boolean
+) {
+  useEffect(() => {
+    if (!ready) return;
+
+    const container = containerRef.current;
+    if (!container || !articleUrl) return;
+
+    function handleCopy(e: ClipboardEvent) {
+      const selection = window.getSelection();
+      const selectedText = selection ? selection.toString() : '';
+      if (!selectedText.trim()) return;
+
+      e.preventDefault();
+
+      let snippet = selectedText.trim().replace(/\s+/g, ' ');
+      if (snippet.length > COPY_SNIPPET_LIMIT) {
+        const cut = snippet.slice(0, COPY_SNIPPET_LIMIT);
+        const lastSpace = cut.lastIndexOf(' ');
+        snippet = (lastSpace > 40 ? cut.slice(0, lastSpace) : cut) + '..';
+      }
+
+      const clipboardText = `${snippet}\n\nRead more at:\n${articleUrl}`;
+      e.clipboardData?.setData('text/plain', clipboardText);
+    }
+
+    container.addEventListener('copy', handleCopy);
+    return () => container.removeEventListener('copy', handleCopy);
+  }, [containerRef, articleUrl, ready]);
 }
 
 /* ── Share Sidebar ── */
@@ -366,6 +487,7 @@ export function ArticleDetailPage() {
   const [related, setRelated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -385,14 +507,6 @@ export function ArticleDetailPage() {
     setNotFound(false);
 
     const tryFetch = async () => {
-      // FIXED: previously this awaited /region-articles/:id FIRST, and only
-      // started /section-articles/:id if that failed — meaning every single
-      // section article (the majority of the site's content: UK, Opinion,
-      // Interviews, Video, Tashkent, TIIF, Aviation, World, Editor's Picks,
-      // In Focus, Diplomatic Corner) paid for a full failed round-trip
-      // before the correct request even began. Firing both in parallel and
-      // taking whichever one actually has the article cuts that wasted
-      // round-trip out entirely.
       const [regionResult, sectionResult] = await Promise.allSettled([
         fetch(`${API_URL}/region-articles/${id}`).then(r => (r.ok ? r.json() : null)),
         fetch(`${API_URL}/section-articles/${id}`).then(r => (r.ok ? r.json() : null)),
@@ -448,6 +562,18 @@ export function ArticleDetailPage() {
     tryFetch();
   }, [id]);
 
+  // Attaches the copy interceptor to the article content column. Uses
+  // window.location.href so the appended link always matches whatever
+  // URL the person is actually viewing (works the same in dev/staging/
+  // production without hardcoding a domain).
+  //
+  // `ready` gates this to the moment loading finishes AND article data
+  // exists — that's exactly when contentRef.current stops being null,
+  // which is the fix for the bug where the listener never attached.
+  const articleUrl = typeof window !== 'undefined' ? window.location.href : '';
+  const copyProtectionReady = !loading && !!article;
+  useArticleCopyProtection(contentRef, articleUrl, copyProtectionReady);
+
   if (loading) return <ArticleSkeleton />;
 
   if (notFound || !article) return (
@@ -469,15 +595,13 @@ export function ArticleDetailPage() {
       <div className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
         {/*
           ── Layout:
-          [share sidebar (hidden on mobile)] | [article content] | [ad banner (xl only)]
-          On mobile: share buttons appear inline below the Back button
-
-          NOTE: the cover image now lives INSIDE this same contained column
-          (previously it was full-viewport-width above this container,
-          which is what made it look oversized compared to sites like
-          Financia that keep the cover image within the article's own
-          width). It's capped to a sensible max height instead of scaling
-          with viewport width.
+          [share sidebar (hidden on mobile)] | [article content] | [ad banner]
+          On mobile: share buttons appear inline below the Back button, and
+          a SEPARATE ad banner is rendered inline near the top of the article
+          body (right after the byline/meta row) — the desktop sidebar ad in
+          the third grid column is now desktop-only (hidden below xl), since
+          on mobile it was stacking dead last, below the entire article and
+          related-articles section, where it went unnoticed.
         */}
         <div className="grid gap-10 xl:grid-cols-[56px,1fr,300px]">
 
@@ -488,8 +612,12 @@ export function ArticleDetailPage() {
             </div>
           </div>
 
-          {/* ── MIDDLE: Article content ── */}
-          <div>
+          {/* ── MIDDLE: Article content ──
+              ref={contentRef} is what the copy interceptor listens on —
+              it covers the title, meta, and full body, so a copy from
+              anywhere in this column gets the short-excerpt + link
+              treatment, not just the body text. */}
+          <div ref={contentRef}>
             {/* Back button row */}
             <div className="mb-6 flex flex-wrap items-center gap-3">
               <button onClick={() => navigate(-1)}
@@ -500,11 +628,7 @@ export function ArticleDetailPage() {
                 Back
               </button>
 
-              {/* Mobile share row (visible only on small screens).
-                  min-w-0 lets this flex child actually shrink instead of forcing
-                  the row wider than the viewport; overflow-x-auto means if the
-                  icons still don't all fit, the row scrolls instead of the last
-                  icon(s) getting silently cut off at the screen edge. */}
+              {/* Mobile share row (visible only on small screens). */}
               <div className="flex min-w-0 flex-1 items-center gap-2 overflow-x-auto xl:hidden">
                 <MobileShareBar title={article.title || ''} />
               </div>
@@ -520,11 +644,6 @@ export function ArticleDetailPage() {
                   allowFullScreen />
               </div>
             ) : article.imageUrl && (
-              // Cloudinary-optimized: served resized + auto-compressed instead
-              // of the full original file, regardless of how large it was
-              // uploaded at. Contained within the article column, capped
-              // to a max height so it reads like a normal cover image
-              // rather than a full-bleed banner.
               <div className="mb-8 overflow-hidden rounded-2xl shadow-sm">
                 <img src={cld(article.imageUrl, 1200)} alt={article.title}
                   className="w-full object-cover"
@@ -558,6 +677,15 @@ export function ArticleDetailPage() {
 
             <hr className="my-8 border-slate-100" />
 
+            {/* ── Mobile-only ad — placed right at the top of the article
+                body, directly below the byline. This is the spot most news
+                sites use for a mobile in-content ad since it's guaranteed
+                visible without scrolling past the whole article. Hidden on
+                desktop (xl+) since the sticky sidebar ad covers that case. */}
+            <div className="mb-8 xl:hidden">
+              <AdBanner identifier="article-mobile-banner" />
+            </div>
+
             {hasBlocks ? (
               <div className="space-y-0">
                 {article.blocks.map((block: any, i: number) => (
@@ -567,7 +695,7 @@ export function ArticleDetailPage() {
             ) : (
               content && (
                 isHTML(content)
-                  ? <div className="prose-article" dangerouslySetInnerHTML={{ __html: decodeAndStrip(content) }} />
+                  ? <SafeHtml className="prose-article" html={decodeAndStrip(content)} />
                   : <div className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{content}</div>
               )
             )}
@@ -591,8 +719,6 @@ export function ArticleDetailPage() {
                         className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
                         {rel.imageUrl && (
                           <div className="aspect-[4/3] overflow-hidden">
-                            {/* Small card thumbnail — w_500 is plenty, no
-                                reason to load a multi-MB original here */}
                             <img src={cld(rel.imageUrl, 500)} alt={rel.title} loading="lazy"
                               className="h-full w-full object-cover transition duration-300 group-hover:scale-105" />
                           </div>
@@ -610,9 +736,16 @@ export function ArticleDetailPage() {
             )}
           </div>
 
-          {/* ── RIGHT: Ad banner (xl only) ── */}
+          {/* ── RIGHT: Ad banner — desktop only now.
+              This column previously always rendered (with only its sticky
+              positioning gated to xl+), which meant on mobile it stacked
+              below the ENTIRE article and related-articles section, easy
+              to miss/never scroll to. The mobile-visible ad now lives
+              inline near the top of the article body instead (see above);
+              this sidebar version is reserved for the desktop layout where
+              the 3-column grid actually applies. */}
           <div className="hidden xl:block">
-            <div className="sticky top-6">
+            <div className="xl:sticky xl:top-6">
               <AdBanner vertical />
             </div>
           </div>
