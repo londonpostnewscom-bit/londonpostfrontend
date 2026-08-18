@@ -876,7 +876,7 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
-        <CenterHeader dark tone="navy" title="Diplomatic Corner" titleTo="/section/diplomatic-corner"
+        <CenterHeader dark tone="navy" title="Geopolitical Dispatch" titleTo="/section/geopolitical-dispatch"
           description="In-depth diplomatic analysis, treaties, negotiations and foreign policy insights."
         />
         <ArrowCarousel tone="navy" items={articles} renderCard={(article: Article) => (
