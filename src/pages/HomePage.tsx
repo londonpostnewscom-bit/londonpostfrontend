@@ -1,4 +1,5 @@
 
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -6,7 +7,7 @@ import { Hero } from '../components/Hero';
 import { Article, articles as staticArticles } from '../data/siteData';
 import { PartnersMarquee } from '../components/PartnersMarquee';
 import { cld } from '../utils/Cloudinary';
-
+import { AuthorAvatar } from '../components/AuthorAvatar';
 type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure';
 
 const TONE: Record<Tone, {
@@ -47,7 +48,7 @@ type CaucasusFeed = { armenia: Article[]; georgia: Article[]; azerbaijan: Articl
 type HomeFeedData = {
   uk: Article[]; ep: Article[]; inf: Article[]; intv: Article[];
   vid: any[]; op: Article[]; ca: Article[]; eu: Article[]; ru: Article[];
-  dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[];
+  dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[]; hh: Article[]; kur: Article[];
 };
 let homeFeedCache: HomeFeedData | null = null;
 
@@ -109,7 +110,7 @@ async function fetchRegionSubcategory(area: string, subCategory: string, limit =
 }
 
 async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
-  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi] = await Promise.all([
+  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi, hh, kur] = await Promise.all([
     fetchSectionHome('uk', 4),
     fetchSectionHome('editors-picks', 4),
     fetchSectionHome('in-focus', 4),
@@ -125,8 +126,10 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
     fetchRegionSubcategory('caucasus', 'georgia', 4),
     fetchRegionSubcategory('caucasus', 'azerbaijan', 4),
     fetchSectionHome('aviation', 5),
+    fetchSectionHome('hidden-histories', 8),
+    fetchSectionHome('kazakhstan-kurultai-elections-2026', 5),
   ]);
-  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi };
+  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi, hh, kur };
 }
 
 function getYtThumb(videoId: string) {
@@ -472,7 +475,7 @@ function VideoSection({ videos }: { videos: any[] }) {
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader dark tone="crimson" title="Watch & Learn" titleTo="/section/video"
-          
+          description="Video reports, documentary clips and analysis from our global team."
         />
         <div className="grid gap-6 lg:grid-cols-[1.5fr,1fr]">
           <Link to={`/video/${featureId}`} className="group relative overflow-hidden rounded-xl border border-accent/20">
@@ -518,19 +521,23 @@ function VideoSection({ videos }: { videos: any[] }) {
   );
 }
 
+
+
+
+
 function OpinionSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className="bg-soft py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader tone="gold" title="Opinion" titleTo="/section/opinion"
-        
+          description="Perspectives from analysts, contributors and thought leaders."
         />
         <div className="mx-auto grid max-w-5xl divide-y divide-slate-200 sm:grid-cols-2 sm:divide-y-0">
           {articles.map((article, i) => (
             <Link key={article.id} to={`/article/${article.id}`}
               className={`group flex gap-4 py-6 sm:px-6 ${i % 2 === 0 ? 'sm:border-r sm:border-slate-200' : ''}`}>
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-gold/10 font-serif text-2xl leading-none text-gold">&ldquo;</span>
+              <AuthorAvatar name={article.author} size="md" />
               <div className="min-w-0 flex-1">
                 <CategoryTag category={article.category} tone="gold" />
                 <h3 className="mt-1.5 font-serif text-lg italic leading-snug text-ink transition group-hover:text-gold">{article.title}</h3>
@@ -550,7 +557,7 @@ function CentralAsiaSection({ articles }: { articles: Article[] }) {
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader dark tone="lagoon" title="Central Asia Coverage" titleTo="/region/asia/central-asia"
-          
+          description="Strategic reporting from Kazakhstan, Uzbekistan, Kyrgyzstan, Tajikistan and Turkmenistan."
         />
         <ArrowCarousel tone="lagoon" items={articles} renderCard={(article: Article) => (
           <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border-t-2 border-lagoon bg-lagoon/[0.06] transition hover:-translate-y-1 hover:bg-lagoon/[0.12]">
@@ -571,6 +578,56 @@ function CentralAsiaSection({ articles }: { articles: Article[] }) {
   );
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   SECTION — Kazakhstan "Kurultai" Elections 2026
+   Concept: "Election Watch" — a formal, official-feeling briefing (navy,
+   the same tone used for UK/Europe's structural sections) rather than
+   the carousel/dispatch treatment right above it, so a reader can tell
+   at a glance this is a distinct, event-specific desk and not just more
+   Central Asia coverage. The lead card carries a ballot-badge instead
+   of Central Asia's "Dispatch" tag or In Focus's "Dossier" stamp.
+   ═══════════════════════════════════════════════════════════════════ */
+function KurultaiSection({ articles }: { articles: Article[] }) {
+  if (!articles.length) return null;
+  const [lead, ...rest] = articles;
+  return (
+    <section className="bg-white py-16">
+      <div className="mx-auto max-w-7xl px-4 lg:px-6">
+        <CenterHeader tone="navy" title="Kazakhstan 'Kurultai' Elections 2026" titleTo="/section/kazakhstan-kurultai-elections-2026"
+          description="Full coverage of Kazakhstan's 2026 Kurultai elections — candidates, results and analysis."
+        />
+        <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
+          <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
+            <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
+              {lead.image
+                ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                : <div className="h-full w-full bg-slate-100" />}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+            <span className="absolute left-6 top-6 rounded-full bg-primary px-3 py-1 text-[10.5px] font-black uppercase tracking-[0.14em] text-white">
+              🗳️ Election Watch
+            </span>
+            <div className="absolute inset-x-0 bottom-0 p-6 lg:p-8">
+              <CategoryTag category={lead.category} dark tone="navy" />
+              <h3 className="mt-2 text-2xl font-bold leading-tight text-white lg:text-3xl">{lead.title}</h3>
+              {lead.subtitle && <p className="mt-2 max-w-xl text-sm text-white/70 line-clamp-2">{lead.subtitle}</p>}
+              <p className="mt-3 text-xs text-white/50">{lead.author} · {lead.date}</p>
+            </div>
+          </Link>
+          <div className="flex flex-col rounded-xl border border-primary/15 bg-white px-6">
+            <p className="border-b border-slate-200 pb-3 pt-5 text-[11px] font-black uppercase tracking-[0.14em] text-primary/60">More Election Coverage</p>
+            <div className="flex-1">
+              {rest.slice(0, 4).map(article => (
+                <ListRow key={article.id} article={article} tone="navy" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function EuropeSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
@@ -578,7 +635,7 @@ function EuropeSection({ articles }: { articles: Article[] }) {
     <section className="bg-white py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader tone="navy" title="Europe" titleTo="/region/europe"
-          
+          description="Western, Eastern, Northern and Southern Europe — diplomacy, security and economics."
         />
         {rest.length === 0 ? (
           <LeadHorizontalCard article={lead} tone="navy" imageWidth="sm:w-1/2" big />
@@ -606,7 +663,7 @@ function RussiaSection({ articles }: { articles: Article[] }) {
     <section className="bg-soft py-16">
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader tone="crimson" title="Russia" titleTo="/region/russia"
-         
+          description="Strategic reporting, politics, diplomacy and economic coverage from Russia."
         />
         {side.length === 0 ? (
           <LeadHorizontalCard article={lead} tone="crimson" imageWidth="sm:w-1/2" big />
@@ -681,7 +738,6 @@ function TashkentSection({ articles }: { articles: Article[] }) {
         ) : LeadCard}
 
         <div className="mt-8 sm:hidden text-center">
-         
         </div>
       </div>
     </section>
@@ -701,8 +757,7 @@ function CaucasusSection({ armenia, georgia, azerbaijan }: { armenia: Article[];
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader dark tone="lagoon" title="Caucasus Coverage" titleTo="/region/caucasus"
-          
-          
+          description="Strategic reporting from Armenia, Georgia and Azerbaijan."
         />
         <div className={`grid gap-6 ${countries.length === 1 ? '' : countries.length === 2 ? 'md:grid-cols-2' : 'md:grid-cols-3'}`}>
           {countries.map(c => (
@@ -780,14 +835,49 @@ function AviationSection({ articles }: { articles: Article[] }) {
   );
 }
 
+
+function HiddenHistoriesSection({ articles }: { articles: Article[] }) {
+  if (!articles.length) return null;
+  return (
+    <section className="bg-soft py-16">
+      <div className="mx-auto max-w-7xl px-4 lg:px-6">
+        <CenterHeader tone="gold" title="Hidden Histories / Stories" titleTo="/section/hidden-histories"
+          description="Untold stories and forgotten chapters resurfaced — the histories that shaped today, rediscovered."
+        />
+        <ArrowCarousel tone="gold" items={articles} renderCard={(article: Article) => (
+          <Link to={`/article/${article.id}`}
+            className="group relative block overflow-hidden rounded-xl border border-gold/25 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
+            <div className="relative aspect-[4/3] overflow-hidden">
+              {article.image
+                ? <img
+                    src={cld(article.image, 600)}
+                    alt={article.title}
+                    className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    style={{ filter: 'sepia(0.18) contrast(1.02)' }}
+                  />
+                : <div className="h-full w-full bg-slate-100" />}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
+             
+            </div>
+            <div className="p-5">
+              <CategoryTag category={article.category} tone="gold" />
+              <h3 className="mt-1.5 line-clamp-2 text-sm font-bold leading-snug text-ink">{article.title}</h3>
+              <p className="mt-1.5 text-xs text-slate-400">{article.author} · {article.date}</p>
+            </div>
+          </Link>
+        )} />
+      </div>
+    </section>
+  );
+}
+
 function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
     <section className={DARK_BG + ' py-16'}>
       <div className="mx-auto max-w-7xl px-4 lg:px-6">
         <CenterHeader dark tone="navy" title="Diplomatic Corner" titleTo="/section/diplomatic-corner"
-          
-         
+          description="In-depth diplomatic analysis, treaties, negotiations and foreign policy insights."
         />
         <ArrowCarousel tone="navy" items={articles} renderCard={(article: Article) => (
           <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.08] transition hover:-translate-y-1 hover:bg-primary/[0.15]">
@@ -812,7 +902,6 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
 export function HomePage() {
   const staticUK      = useMemo(() => staticArticles.filter(a => a.region === 'United Kingdom').slice(0, 4), []);
   const staticEdPick  = useMemo(() => staticArticles.filter(a => a.featured).slice(0, 4), []);
-  const staticFocus   = useMemo(() => staticArticles.filter(a => ['Analysis','Diplomacy'].includes(a.category)).slice(0, 4), []);
   const staticIntvw   = useMemo(() => staticArticles.filter(a => a.category === 'Interviews' || a.topic === 'Interviews').slice(0, 4), []);
 
   const [feed, setFeed] = useState<HomeFeedData | null>(homeFeedCache);
@@ -841,7 +930,11 @@ export function HomePage() {
 
   const displayUK       = feed.uk.length      ? feed.uk      : staticUK;
   const displayEdPick   = feed.ep.length      ? feed.ep      : staticEdPick;
-  const displayInFocus  = feed.inf.length     ? feed.inf     : staticFocus;
+  // In Focus intentionally has NO static/demo fallback — this section
+  // should stay hidden (InFocusSection already returns null on an empty
+  // array) until the admin publishes a real In Focus article, rather
+  // than silently showing placeholder content that looks like real news.
+  const displayInFocus  = feed.inf;
   const displayIntvw    = feed.intv.length    ? feed.intv    : staticIntvw;
   const displayVideos   = feed.vid;
   const displayOpinion  = feed.op;
@@ -852,6 +945,8 @@ export function HomePage() {
   const displayTashkent = feed.tash;
   const displayCaucasus = feed.cauc;
   const displayAviation = feed.avi;
+  const displayHiddenHistories = feed.hh;
+  const displayKurultai = feed.kur;
 
   return (
     <div>
@@ -868,12 +963,14 @@ export function HomePage() {
       <VideoSection videos={displayVideos} />
       <OpinionSection articles={displayOpinion} />
       <CentralAsiaSection articles={displayCA} />
+      <KurultaiSection articles={displayKurultai} />
       <EuropeSection articles={displayEurope} />
       <RussiaSection articles={displayRussia} />
 
       <TashkentSection articles={displayTashkent} />
       <CaucasusSection armenia={displayCaucasus.armenia} georgia={displayCaucasus.georgia} azerbaijan={displayCaucasus.azerbaijan} />
       <AviationSection articles={displayAviation} />
+      <HiddenHistoriesSection articles={displayHiddenHistories} />
 
       <DiplomaticCornerSection articles={displayDiplo} />
 
