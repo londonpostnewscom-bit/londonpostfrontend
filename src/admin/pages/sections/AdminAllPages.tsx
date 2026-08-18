@@ -29,7 +29,7 @@ const MORE_SECTIONS = [
   { value: 'defence',           label: 'Defence',             type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'video',             label: 'Video',               type: 'section' as const, subCategories: [], isVideo: true  },
   { value: 'opinion',           label: 'Opinion',             type: 'section' as const, subCategories: [], isVideo: false },
-  { value: 'diplomatic-corner', label: 'Diplomatic Horizon',  type: 'section' as const, subCategories: [], isVideo: false },
+  { value: 'diplomatic-corner', label: 'Geopolitical Dispatch',  type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'tashkent',          label: 'Tashkent',            type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'tiif-2026',         label: 'TIIF-2026',           type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'world',             label: 'World',                type: 'section' as const, subCategories: [], isVideo: false },
