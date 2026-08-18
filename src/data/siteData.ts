@@ -32,10 +32,28 @@ function slugifyNav(s: string) {
 }
 // In `moreMenu`, add these three so they appear in the "More" dropdown:
 // In moreMenu, add 'Aviation':
+// export const moreMenu = [
+//   'Sports', 'Interviews', 'Art & Culture', 'Hidden Histories/Stories', 'Youth Voices',
+//   'Economy', 'Defence', 'Video', 'Opinion', 'Diplomatic Corner',
+//   'United Kingdom', "Editor's Picks", 'In Focus', 'Aviation','kazakhstan-kurultai-elections-2026',
+// ];
+
 export const moreMenu = [
-  'Sports', 'Interviews', 'Art & Culture', 'Hidden Histories/Stories', 'Youth Voices',
-  'Economy', 'Defence', 'Video', 'Opinion', 'Diplomatic Corner',
-  'United Kingdom', "Editor's Picks", 'In Focus', 'Aviation','kazakhstan-kurultai-elections-2026',
+  { value: 'sports',             label: 'Sports' },
+  { value: 'interviews',         label: 'Interviews' },
+  { value: 'art-culture',        label: 'Art & Culture' },
+  { value: 'hidden-histories',   label: 'Hidden Histories/Stories' },
+  { value: 'youth-voices',       label: 'Youth Voices' },
+  { value: 'economy',            label: 'Economy' },
+  { value: 'defence',            label: 'Defence' },
+  { value: 'video',              label: 'Video' },
+  { value: 'opinion',            label: 'Opinion' },
+  { value: 'diplomatic-corner',  label: 'Geopolitical Dispatch', urlSlug: 'geopolitical-dispatch' },
+  { value: 'uk',                 label: 'United Kingdom' },
+  { value: 'editors-picks',      label: "Editor's Picks" },
+  { value: 'in-focus',           label: 'In Focus' },
+  { value: 'aviation',           label: 'Aviation' },
+  { value: 'kazakhstan-kurultai-elections-2026', label: 'kazakhstan-kurultai-elections-2026' },
 ];
 export const regionMenus: Record<string, string[]> = {
   asia:       ['East Asia', 'South Asia', 'Southeast Asia', 'Central Asia'],
@@ -44,7 +62,7 @@ export const regionMenus: Record<string, string[]> = {
   oceania:    [],
   africa:     [],
   americas:   ['North America', 'Latin America & Caribbean', 'South America'],
- caucasus:   ['Armenia', 'Georgia', 'Azerbaijan'],
+  caucasus:   ['Armenia', 'Georgia', 'Azerbaijan'],
   russia:     [],
 };
 
@@ -73,8 +91,8 @@ export const navigation: NavCategory[] = [
     slug: '/more',
  children: [
   ...moreMenu.map((item) => ({
-    name: item,
-    slug: `/section/${slugifyNav(item)}`,
+   name: item.label,
+    slug: `/section/${item.urlSlug || item.value}`,
   })),
 ],
   },
@@ -288,17 +306,17 @@ export const articles: Article[] = [
   }),
   ...moreMenu.flatMap((section, index) => ({
     id: `section-${index}`,
-    title: `${section}: editorial special for fast-moving global developments`,
+    title: `${section.label}: editorial special for fast-moving global developments`,
     subtitle: 'Designed to demonstrate dedicated section pages with featured, latest and archived blocks.',
     content: detailed,
     image: `https://picsum.photos/seed/section-${index}/1200/800`,
     author: 'Section Editor',
     date: 'March 08, 2026',
-    category: section,
+    category: section.value,
     region: 'Global',
     featured: index % 2 === 0,
     archived: index % 3 === 0,
-    topic: section,
+    topic: section.value,
   })),
 ];
 
