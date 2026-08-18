@@ -33,9 +33,9 @@ function slugifyNav(s: string) {
 // In `moreMenu`, add these three so they appear in the "More" dropdown:
 // In moreMenu, add 'Aviation':
 export const moreMenu = [
-  'Sports', 'Interviews', 'Art & Culture', 'Hidden Histories', 'Youth Voices',
+  'Sports', 'Interviews', 'Art & Culture', 'Hidden Histories/Stories', 'Youth Voices',
   'Economy', 'Defence', 'Video', 'Opinion', 'Diplomatic Corner',
-  'United Kingdom', "Editor's Picks", 'In Focus', 'Aviation',
+  'United Kingdom', "Editor's Picks", 'In Focus', 'Aviation','kazakhstan-kurultai-elections-2026',
 ];
 export const regionMenus: Record<string, string[]> = {
   asia:       ['East Asia', 'South Asia', 'Southeast Asia', 'Central Asia'],
