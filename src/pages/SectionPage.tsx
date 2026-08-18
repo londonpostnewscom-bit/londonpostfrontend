@@ -1,10 +1,9 @@
 
-
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { SectionHeading } from '../components/SectionHeading';
-import { Article, articles as staticArticles } from '../data/siteData';
+import { Article, articles as staticArticles, moreMenu } from '../data/siteData';
 import { PaginatedArticles } from '../components/PaginatedArticles';
 import { ArchivedFilter } from '../components/ArchivedFilter';
 import { bucketArticles } from '../utils/articleBuckets';
@@ -26,11 +25,16 @@ const CROSS_POST_PAGES = ['world', 'editors-picks', 'in-focus'];
 // silently disagree, the fetch below finds zero articles, and the page
 // looks empty even though articles genuinely exist. This maps every
 // known mismatch back to the real section value.
+//
+// 'geopolitical-dispatch' is a deliberate public-facing rename: the nav
+// links to /section/geopolitical-dispatch (via moreMenu's urlSlug), but
+// all the actual article data is still stored under 'diplomatic-corner'.
+// This alias bridges that gap so the fetch below still finds the data.
 const SLUG_ALIASES: Record<string, string> = {
   'art-and-culture': 'art-culture',
-  'diplomatic-horizon': 'diplomatic-corner',
   'united-kingdom': 'uk',
   'editor-s-picks': 'editors-picks',
+  'geopolitical-dispatch': 'diplomatic-corner',
 };
 
 // Per-slug in-memory cache — same pattern as HomePage's homeFeedCache and
@@ -92,11 +96,19 @@ function SectionSkeleton() {
 export function SectionPage() {
   const { slug: rawSlug = '' } = useParams();
   // Use the alias-corrected slug for everything that talks to the backend
-  // or matches static data; keep the raw slug only for the display title,
-  // so a URL like /section/united-kingdom still shows "United Kingdom"
-  // instead of the shorter canonical value's title-cased form ("Uk").
+  // or matches static data; keep the raw slug only as a last-resort title
+  // fallback, so a URL like /section/united-kingdom still shows "United
+  // Kingdom" instead of the shorter canonical value's title-cased form
+  // ("Uk") if it's ever not found in moreMenu.
   const slug = SLUG_ALIASES[rawSlug] || rawSlug;
-  const title = toTitle(rawSlug);
+
+  // Prefer the admin-editable label from moreMenu (keyed by the real,
+  // permanent `value`, e.g. 'diplomatic-corner') so renaming a section's
+  // display name in siteData.ts is reflected here automatically. Falls
+  // back to title-casing the slug for sections not in moreMenu (regions,
+  // world, etc.).
+  const menuMatch = moreMenu.find((item) => item.value === slug);
+  const title = menuMatch ? menuMatch.label : toTitle(rawSlug);
 
   const cached = sectionCache.get(slug);
   const [apiArticles, setApiArticles] = useState<Article[]>(cached || []);
