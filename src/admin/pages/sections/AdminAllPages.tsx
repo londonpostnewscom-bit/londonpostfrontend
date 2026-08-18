@@ -1,5 +1,6 @@
 
 
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminApi } from '../../hooks/useAdminApi';
 import { RichTextEditor } from '../../components/RichTextEditor';
@@ -35,16 +36,11 @@ const MORE_SECTIONS = [
   { value: 'uk',                label: 'United Kingdom',       type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'editors-picks',     label: "Editor's Picks",       type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'in-focus',          label: 'In Focus',              type: 'section' as const, subCategories: [], isVideo: false },
-  // In MORE_SECTIONS array, add:
-{ value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
+  { value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
 ];
 
 const ALL_SECTIONS = [...WORLD_REGIONS, ...MORE_SECTIONS];
 
-// The only 3 buckets an article can be manually cross-posted into. Every
-// other home block (UK, Central Asia, Europe, Russia, Interviews, Video,
-// Opinion, Diplomatic Corner, Tashkent, TIIF) is fully automatic — publishing
-// there is enough, nothing to check.
 const CROSS_POST_OPTIONS = [
   { value: 'world',         label: '🌐 World (Headline / Hero)' },
   { value: 'editors-picks', label: "📌 Editor's Picks" },
@@ -128,6 +124,152 @@ function DuplicateTitleWarning({ checking, matches }: { checking: boolean; match
   );
 }
 
+/* ─── Opinion-only: author photo resolver ────────────────────────────────
+   Live-checks the typed author name against the Author collection as they
+   type. Three states:
+     - recognized team member  → their official photo shown, NO upload
+       control offered at all (protects the official photo from being
+       casually overwritten from an article form)
+     - recognized contributor  → their last self-uploaded photo shown,
+       with an optional re-upload to replace it
+     - unrecognized name       → upload required (new contributor)
+   Nothing here writes to the Author collection directly — that only
+   happens in UnifiedForm's handleSave, once, right before the article
+   itself saves. ─────────────────────────────────────────────────────── */
+
+type AuthorLookup = { name: string; photoUrl: string; isTeamMember: boolean } | null;
+
+function OpinionAuthorPhoto({
+  authorName,
+  photoFile,
+  onPhotoFileChange,
+  lookup,
+  setLookup,
+  checking,
+  setChecking,
+}: {
+  authorName: string;
+  photoFile: File | null;
+  onPhotoFileChange: (f: File | null) => void;
+  lookup: AuthorLookup;
+  setLookup: (v: AuthorLookup) => void;
+  checking: boolean;
+  setChecking: (v: boolean) => void;
+}) {
+  const { get } = useAdminApi();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestQueryRef = useRef(0);
+  const [preview, setPreview] = useState('');
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    const name = authorName?.trim() || '';
+    if (name.length < 2) {
+      setChecking(false);
+      setLookup(null);
+      return;
+    }
+    setChecking(true);
+    debounceRef.current = setTimeout(async () => {
+      const queryId = ++latestQueryRef.current;
+      try {
+        const data = await get(`/authors/lookup/${encodeURIComponent(name)}`);
+        if (queryId === latestQueryRef.current) {
+          setLookup(data || null);
+          setChecking(false);
+        }
+      } catch {
+        if (queryId === latestQueryRef.current) {
+          setChecking(false);
+          setLookup(null);
+        }
+      }
+    }, 500);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authorName]);
+
+  const isTeamMember = lookup?.isTeamMember;
+  const displayPhoto = preview || (isTeamMember ? lookup?.photoUrl : photoFile ? preview : lookup?.photoUrl);
+
+  return (
+    <div className="sm:col-span-2 rounded-xl border border-gray-200 bg-gray-50 p-4">
+      <label className="label mb-2 block">Author Photo</label>
+
+      {checking && <p className="text-xs text-gray-400">Checking author…</p>}
+
+      {!checking && isTeamMember && (
+        <div className="flex items-center gap-3">
+          {lookup?.photoUrl ? (
+            <img src={lookup.photoUrl} alt="" className="h-14 w-14 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-200 text-lg font-bold text-gray-400">
+              {authorName.charAt(0)}
+            </div>
+          )}
+          <p className="text-xs text-green-700 font-medium">
+            ✓ Recognized team member — official photo is used automatically. No upload needed.
+          </p>
+        </div>
+      )}
+
+      {!checking && !isTeamMember && lookup && (
+        <div className="flex items-start gap-3">
+          {displayPhoto ? (
+            <img src={displayPhoto} alt="" className="h-14 w-14 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-200 text-lg font-bold text-gray-400">
+              {authorName.charAt(0)}
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-gray-500 mb-1.5">
+              Known contributor — using their last uploaded photo. Optionally replace it below.
+            </p>
+            <input
+              type="file" accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { onPhotoFileChange(f); setPreview(URL.createObjectURL(f)); }
+              }}
+              className="text-xs text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-red-700"
+            />
+          </div>
+        </div>
+      )}
+
+      {!checking && !lookup && authorName?.trim().length >= 2 && (
+        <div className="flex items-start gap-3">
+          {displayPhoto ? (
+            <img src={displayPhoto} alt="" className="h-14 w-14 rounded-full object-cover border border-gray-200" />
+          ) : (
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gray-200 text-lg font-bold text-gray-400">
+              {authorName.charAt(0)}
+            </div>
+          )}
+          <div>
+            <p className="text-xs text-amber-600 mb-1.5">
+              New contributor — a photo is required for this author's first Opinion piece.
+            </p>
+            <input
+              type="file" accept="image/*"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { onPhotoFileChange(f); setPreview(URL.createObjectURL(f)); }
+              }}
+              className="text-xs text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-red-700"
+            />
+          </div>
+        </div>
+      )}
+
+      {!authorName?.trim() && (
+        <p className="text-xs text-gray-400">Type the author's name above first.</p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Unified Article Form ───────────────────────────────────────────── */
 
 type SectionConfig = typeof ALL_SECTIONS[0];
@@ -148,7 +290,7 @@ function UnifiedForm({
   saving: boolean;
   error: string;
 }) {
-  const { get } = useAdminApi();
+  const { get, post } = useAdminApi();
 
   const [f, setF]       = useState<any>({ ...FORM_EMPTY, ...(init || {}) });
   const [file, setFile] = useState<File | null>(null);
@@ -158,6 +300,12 @@ function UnifiedForm({
   const [crossPost, setCrossPost] = useState<string[]>(
     Array.isArray(init?.crossPost) ? init.crossPost : []
   );
+
+  const isOpinion = sectionConfig.value === 'opinion';
+  const [authorLookup, setAuthorLookup] = useState<AuthorLookup>(null);
+  const [authorChecking, setAuthorChecking] = useState(false);
+  const [authorPhotoFile, setAuthorPhotoFile] = useState<File | null>(null);
+  const [uploadingAuthorPhoto, setUploadingAuthorPhoto] = useState(false);
 
   /* ─── Duplicate title detection (live, debounced, across ALL sections) ─── */
   const [titleChecking, setTitleChecking] = useState(false);
@@ -212,10 +360,35 @@ function UnifiedForm({
     setCrossPost(prev => prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    // Opinion-only: if this is a brand-new or updated contributor photo,
+    // save it to the Author collection FIRST. This never touches team
+    // members (the backend silently no-ops if the name is a team member),
+    // and never touches the article document itself — resolution happens
+    // live by name at display time instead.
+    if (isOpinion && authorPhotoFile && f.author?.trim() && !authorLookup?.isTeamMember) {
+      setUploadingAuthorPhoto(true);
+      try {
+        const afd = new FormData();
+        afd.append('name', f.author.trim());
+        afd.append('photo', authorPhotoFile);
+        await post('/authors/contributor', afd);
+      } catch (e) {
+        console.error('Failed to save contributor photo', e);
+      }
+      setUploadingAuthorPhoto(false);
+    }
+
     const { json: blocksJson, files: blockFiles } = serializeBlocks(blocks);
     onSave({ ...f, hashtags: normalizeHashtags(hashTxt), blocks: blocksJson, crossPost: JSON.stringify(crossPost) }, file, blockFiles);
   };
+
+  const opinionPhotoMissing =
+    isOpinion &&
+    f.author?.trim().length >= 2 &&
+    !authorChecking &&
+    !authorLookup &&
+    !authorPhotoFile;
 
   return (
     <div className="rounded-2xl bg-white p-6 shadow-sm border border-gray-100 space-y-5">
@@ -244,6 +417,19 @@ function UnifiedForm({
           <input value={f.date} onChange={e => s('date', e.target.value)} placeholder="e.g. July 21, 2026" className="input w-full" />
           <p className="mt-1 text-[11px] text-gray-400">This drives automatic newest-first sorting everywhere.</p>
         </div>
+
+        {isOpinion && (
+          <OpinionAuthorPhoto
+            authorName={f.author || ''}
+            photoFile={authorPhotoFile}
+            onPhotoFileChange={setAuthorPhotoFile}
+            lookup={authorLookup}
+            setLookup={setAuthorLookup}
+            checking={authorChecking}
+            setChecking={setAuthorChecking}
+          />
+        )}
+
         <div>
           <label className="label">Category</label>
           <input value={f.category} onChange={e => s('category', e.target.value)} className="input w-full" />
@@ -326,18 +512,21 @@ function UnifiedForm({
         </div>
       </div>
 
-      {/* Cover image */}
-      <div>
-        <label className="label">Cover Image {isVideo ? '(optional)' : ''}</label>
-        <div className="flex flex-wrap items-center gap-3">
-          {preview && <img src={preview} alt="" className="h-16 w-24 rounded-xl object-cover border border-gray-200" />}
-          <input type="file" accept="image/*"
-            onChange={e => { const fl = e.target.files?.[0]; if (fl) { setFile(fl); setPrev(URL.createObjectURL(fl)); }}}
-            className="text-xs text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-red-700"
-          />
+      {/* Cover image — hidden entirely for Opinion, since Opinion pieces no
+          longer use a cover image at all (author photo replaces it visually). */}
+      {!isOpinion && (
+        <div>
+          <label className="label">Cover Image {isVideo ? '(optional)' : ''}</label>
+          <div className="flex flex-wrap items-center gap-3">
+            {preview && <img src={preview} alt="" className="h-16 w-24 rounded-xl object-cover border border-gray-200" />}
+            <input type="file" accept="image/*"
+              onChange={e => { const fl = e.target.files?.[0]; if (fl) { setFile(fl); setPrev(URL.createObjectURL(fl)); }}}
+              className="text-xs text-gray-500 file:mr-2 file:rounded-lg file:border-0 file:bg-red-50 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-red-700"
+            />
+          </div>
+          <p className="mt-1 text-xs text-gray-400">This is the main cover image shown in listings and at the top of the article.</p>
         </div>
-        <p className="mt-1 text-xs text-gray-400">This is the main cover image shown in listings and at the top of the article.</p>
-      </div>
+      )}
 
       {/* Block editor */}
       <div>
@@ -361,12 +550,18 @@ function UnifiedForm({
         ))}
       </div>
 
+      {isOpinion && opinionPhotoMissing && (
+        <p className="text-xs text-amber-600">
+          ⚠️ This author needs a photo before saving — scroll up to the Author Photo field.
+        </p>
+      )}
+
       <div className="flex gap-3 justify-end pt-1">
         <button onClick={onCancel} className="rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
         <button onClick={handleSave}
-          disabled={saving || !f.title || (isVideo && !f.videoId)}
+          disabled={saving || uploadingAuthorPhoto || !f.title || (isVideo && !f.videoId) || opinionPhotoMissing}
           className="rounded-xl bg-red-600 px-6 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60">
-          {saving ? 'Saving…' : 'Save Article'}
+          {saving || uploadingAuthorPhoto ? 'Saving…' : 'Save Article'}
         </button>
       </div>
     </div>
