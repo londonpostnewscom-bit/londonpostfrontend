@@ -38,6 +38,8 @@ import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage';
 import { TermsAndConditionsPage } from './pages/TermsAndConditionsPage';
 import { DisclaimerPage } from './pages/DisclaimerPage';
 import { AdminAllPages } from './admin/pages/sections/AdminAllPages';
+import {AdminLivePage } from "./admin/pages/sections/Adminlivepage"
+import { AdminTeam } from './admin/pages/sections/AdminTeam';
 function AppContent() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -93,6 +95,8 @@ function AppContent() {
 <Route path="page-banner"   element={<AdminPageBanner />} />
 <Route path="/admin/contact-requests" element={<AdminContactRequests />} />
 <Route path="/admin/all-pages" element={<AdminAllPages />} />
+<Route path="live" element={<AdminLivePage />} />
+<Route path="team" element={<AdminTeam />} />
         </Route>
 
         <Route path="*" element={<NotFoundPage />} />
