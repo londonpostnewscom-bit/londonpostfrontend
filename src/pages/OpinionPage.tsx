@@ -1,14 +1,14 @@
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
+import { AuthorAvatar } from '../components/AuthorAvatar';
+import { useAuthorPhotos } from '../hooks/useAuthorPhotos';
 import { Article } from '../data/siteData';
-import { cld } from '../utils/Cloudinary';
 import { PageSkeleton } from '../components/PageSkeleton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Same in-memory-cache pattern as HomePage: survives SPA navigation,
-// naturally clears on a real page reload.
 let opinionCache: Article[] | null = null;
 
 function toArticle(a: any): Article {
@@ -17,7 +17,7 @@ function toArticle(a: any): Article {
     title: a.title || '',
     subtitle: a.subtitle || '',
     content: a.content || '',
-    image: a.imageUrl || '',
+    image: '', // Opinion no longer uses cover images at all
     author: a.author || '',
     date: a.date || '',
     category: a.category || '',
@@ -31,16 +31,6 @@ function toArticle(a: any): Article {
   } as Article;
 }
 
-function QuoteIcon() {
-  return (
-    <svg className="h-8 w-8 text-accent/40" fill="currentColor" viewBox="0 0 24 24">
-      <path d="M14.017 21v-7.391c0-5.704 3.731-9.57 8.983-10.609l.995 2.151c-2.432.917-3.995 3.638-3.995 5.849h4v10h-9.983zm-14.017 0v-7.391c0-5.704 3.748-9.57 9-10.609l.996 2.151c-2.433.917-3.996 3.638-3.996 5.849h3.983v10h-9.983z"/>
-    </svg>
-  );
-}
-
-// Sorts newest-first by the article's `date` field.
-// Unparseable dates are pushed to the end rather than breaking the sort.
 function byDateDesc(a: Article, b: Article) {
   const dateA = new Date(a.date).getTime();
   const dateB = new Date(b.date).getTime();
@@ -48,6 +38,22 @@ function byDateDesc(a: Article, b: Article) {
   if (isNaN(dateA)) return 1;
   if (isNaN(dateB)) return -1;
   return dateB - dateA;
+}
+
+function Byline({ article, size = 'md' }: { article: Article; size?: 'sm' | 'md' | 'lg' }) {
+  const { get } = useAuthorPhotos();
+  const isTeam = get(article.author)?.isTeamMember;
+  return (
+    <div className="flex items-center gap-3">
+      <AuthorAvatar name={article.author} size={size} />
+      <div className="min-w-0">
+        <p className="truncate font-bold text-ink">
+          {article.author}
+        </p>
+        <p className="text-xs text-slate-400">{article.date}</p>
+      </div>
+    </div>
+  );
 }
 
 const FEATURED_BATCH = 6;
@@ -87,66 +93,49 @@ export function OpinionPage() {
   if (loading) return <PageSkeleton />;
 
   return (
-    <div className="min-h-screen bg-amber-50">
-      <div className="bg-gradient-to-br from-slate-900 to-slate-600 px-4 py-16 text-center text-white">
-   <span className="inline-block rounded-full border border-accent/50 bg-accent/10 px-4 py-1.5 text-xs font-bold uppercase tracking-widest text-accent sm:text-sm">
-  Opinion
-</span>
-      
+    <div className="min-h-screen bg-white">
+      <div className="border-b border-slate-200 bg-slate-950 px-4 py-14 text-center text-white">
+        <span className="inline-block rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.3em] text-white/70">
+          Perspectives
+        </span>
+        <h1 className="mx-auto mt-5 max-w-2xl font-serif text-3xl font-black leading-tight sm:text-4xl">
+          Opinion
+        </h1>
+        <p className="mx-auto mt-3 max-w-lg text-sm text-white/50">
+          Analysis and commentary from our editorial team and contributing voices.
+        </p>
       </div>
 
-      <div className="mx-auto max-w-7xl px-4 py-12 lg:px-6">
+      <div className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
         <div className="grid gap-10 xl:grid-cols-[1fr,300px]">
           <div>
             {visibleFeatured.length > 0 && (
               <div>
-                <p className="mb-6 text-xs font-bold uppercase tracking-widest text-accent">Featured</p>
-                <div className="grid gap-6">
+                <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
+                  <span className="h-px w-6 bg-accent" /> Featured
+                </p>
+                <div className="grid gap-5">
                   {visibleFeatured.map((article) => (
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="group overflow-hidden rounded-[2rem] bg-white shadow-xl transition hover:-translate-y-1 hover:shadow-2xl"
+                      className="group block rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg sm:p-9"
                     >
-                      <div className="grid lg:grid-cols-[1fr,1.2fr]">
-                        <div className="flex flex-col justify-between p-8 lg:p-10">
-                          <div>
-                            <QuoteIcon />
-                            <span className="mt-4 inline-block text-xs font-bold uppercase tracking-widest text-accent">
-                              {article.category || 'Opinion'}
-                            </span>
-                            <h2 className="mt-3 text-2xl font-black leading-tight text-ink lg:text-3xl">
-                              {article.title}
-                            </h2>
-                            <p className="mt-4 text-slate-600 leading-relaxed">{article.subtitle}</p>
-                          </div>
+                      <span className="inline-block text-xs font-bold uppercase tracking-widest text-accent">
+                        {article.category || 'Opinion'}
+                      </span>
+                      <h2 className="mt-3 font-serif text-2xl font-black leading-tight text-ink transition group-hover:text-accent sm:text-3xl">
+                        {article.title}
+                      </h2>
+                      {article.subtitle && (
+                        <p className="mt-3 text-base leading-relaxed text-slate-600">{article.subtitle}</p>
+                      )}
 
-                          <div className="mt-8">
-                            <div className="flex items-center gap-3">
-                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary text-sm font-bold text-white">
-                                {article.author.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="font-semibold text-ink">{article.author}</p>
-                                <p className="text-xs text-slate-400">{article.date}</p>
-                              </div>
-                            </div>
-
-                            <span className="mt-5 inline-flex rounded-full border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition group-hover:bg-primary group-hover:text-white">
-                              Read Full Opinion
-                            </span>
-                          </div>
-                        </div>
-{article.image && (
-  <div className="overflow-hidden">
-    <img
-      src={cld(article.image, 900)}
-      alt={article.title}
-      loading="lazy"
-      className="aspect-[4/3] w-full object-cover transition duration-500 group-hover:scale-105 sm:aspect-[16/9] lg:aspect-auto lg:h-full lg:rounded-r-[2rem]"
-    />
-  </div>
-)}
+                      <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
+                        <Byline article={article} size="lg" />
+                        <span className="hidden rounded-full border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition group-hover:bg-primary group-hover:text-white sm:inline-flex">
+                          Read Full Opinion
+                        </span>
                       </div>
                     </Link>
                   ))}
@@ -166,31 +155,28 @@ export function OpinionPage() {
             )}
 
             {visibleLatest.length > 0 && (
-              <div className="mt-12">
-                <p className="mb-6 text-xs font-bold uppercase tracking-widest text-accent">Latest</p>
-                <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-14">
+                <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
+                  <span className="h-px w-6 bg-accent" /> Latest
+                </p>
+                <div className="grid gap-5 sm:grid-cols-2">
                   {visibleLatest.map((article) => (
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="group rounded-[1.75rem] border border-amber-100 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-soft"
+                      className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
                     >
-                      <QuoteIcon />
-                      <span className="mt-3 inline-block text-[10px] font-bold uppercase tracking-widest text-accent">
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
                         {article.category}
                       </span>
-                      <h3 className="mt-2 line-clamp-3 text-base font-bold leading-snug text-ink">
+                      <h3 className="mt-2 line-clamp-3 font-serif text-lg font-bold leading-snug text-ink transition group-hover:text-accent">
                         {article.title}
                       </h3>
-                      <p className="mt-2 line-clamp-2 text-sm text-slate-500">{article.subtitle}</p>
-                      <div className="mt-4 flex items-center gap-2 border-t border-amber-100 pt-4">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-accent to-primary text-xs font-bold text-white">
-                          {article.author.charAt(0)}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-xs font-semibold text-ink">{article.author}</p>
-                          <p className="text-xs text-slate-400">{article.date}</p>
-                        </div>
+                      {article.subtitle && (
+                        <p className="mt-2 line-clamp-2 text-sm text-slate-500">{article.subtitle}</p>
+                      )}
+                      <div className="mt-5 border-t border-slate-100 pt-4">
+                        <Byline article={article} size="sm" />
                       </div>
                     </Link>
                   ))}
@@ -210,24 +196,17 @@ export function OpinionPage() {
             )}
 
             {visibleArchived.length > 0 && (
-              <div className="mt-12">
+              <div className="mt-14">
                 <p className="mb-5 text-xs font-bold uppercase tracking-widest text-slate-400">Archived</p>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {visibleArchived.map((article) => (
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="flex items-center gap-4 rounded-2xl border border-amber-100 bg-white p-4 transition hover:bg-amber-50"
+                      className="flex items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
                     >
-                      {article.image && (
-                        <img
-                          src={cld(article.image, 200)}
-                          alt={article.title}
-                          loading="lazy"
-                          className="h-14 w-20 flex-shrink-0 rounded-xl object-cover"
-                        />
-                      )}
-                      <div className="min-w-0">
+                      <AuthorAvatar name={article.author} size="sm" />
+                      <div className="min-w-0 flex-1">
                         <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
                           {article.category}
                         </span>
@@ -252,7 +231,7 @@ export function OpinionPage() {
             )}
 
             {articles.length === 0 && (
-              <div className="rounded-[2rem] border-2 border-dashed border-amber-200 p-16 text-center text-amber-400">
+              <div className="rounded-2xl border-2 border-dashed border-slate-200 p-16 text-center text-slate-400">
                 <p className="text-lg font-semibold">No opinion pieces yet</p>
                 <p className="mt-2 text-sm">Add articles from Admin → More Sections → Opinion</p>
               </div>
