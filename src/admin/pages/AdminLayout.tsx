@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Link, useLocation, Outlet, useNavigate } from 'react-router-dom';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -16,6 +17,7 @@ const NAV_OTHER = [
   { path: '/admin/membership', label: 'Membership', icon: '💳', desc: 'Plans & submissions' },
   { path: '/admin/page-banner', label: 'Banner — All Pages', icon: '🖼️', desc: 'Right sidebar on every page' },
   { path: '/admin/contact-requests', label: 'Contact Requests', icon: '📩', desc: 'Contact + header query form submissions' },
+  { path: '/admin/team', label: 'Team members Record', icon: '👥', desc: 'Team members here' },
 ];
 
 const GROUPS = [
