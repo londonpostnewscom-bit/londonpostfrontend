@@ -213,7 +213,7 @@ export function OpinionPage() {
                         <h3 className="mt-0.5 truncate font-bold text-ink">{article.title}</h3>
                         <p className="text-xs text-slate-400">{article.author} · {article.date}</p>
                       </div>
-                    </Link>
+                    </Link> 
                   ))}
                 </div>
 
