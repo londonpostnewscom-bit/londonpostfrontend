@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -44,7 +43,7 @@ function Byline({ article, size = 'md' }: { article: Article; size?: 'sm' | 'md'
   const { get } = useAuthorPhotos();
   const isTeam = get(article.author)?.isTeamMember;
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex items-center gap-3 min-w-0">
       <AuthorAvatar name={article.author} size={size} />
       <div className="min-w-0">
         <p className="truncate font-bold text-ink">
@@ -93,7 +92,7 @@ export function OpinionPage() {
   if (loading) return <PageSkeleton />;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-white overflow-x-hidden">
       <div className="border-b border-slate-200 bg-slate-950 px-4 py-14 text-center text-white">
         <span className="inline-block rounded-full border border-white/20 bg-white/5 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.3em] text-white/70">
           Perspectives
@@ -107,33 +106,33 @@ export function OpinionPage() {
       </div>
 
       <div className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
-        <div className="grid gap-10 xl:grid-cols-[1fr,300px]">
-          <div>
+        <div className="grid min-w-0 gap-10 xl:grid-cols-[1fr,300px]">
+          <div className="min-w-0">
             {visibleFeatured.length > 0 && (
               <div>
                 <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
                   <span className="h-px w-6 bg-accent" /> Featured
                 </p>
-                <div className="grid gap-5">
+                <div className="grid min-w-0 gap-5">
                   {visibleFeatured.map((article) => (
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="group block rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg sm:p-9"
+                      className="group block min-w-0 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg sm:p-9"
                     >
                       <span className="inline-block text-xs font-bold uppercase tracking-widest text-accent">
                         {article.category || 'Opinion'}
                       </span>
-                      <h2 className="mt-3 font-serif text-2xl font-black leading-tight text-ink transition group-hover:text-accent sm:text-3xl">
+                      <h2 className="mt-3 break-words font-serif text-2xl font-black leading-tight text-ink transition group-hover:text-accent sm:text-3xl">
                         {article.title}
                       </h2>
                       {article.subtitle && (
-                        <p className="mt-3 text-base leading-relaxed text-slate-600">{article.subtitle}</p>
+                        <p className="mt-3 break-words text-base leading-relaxed text-slate-600">{article.subtitle}</p>
                       )}
 
-                      <div className="mt-6 flex items-center justify-between border-t border-slate-100 pt-5">
+                      <div className="mt-6 flex items-center justify-between gap-4 border-t border-slate-100 pt-5">
                         <Byline article={article} size="lg" />
-                        <span className="hidden rounded-full border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition group-hover:bg-primary group-hover:text-white sm:inline-flex">
+                        <span className="hidden shrink-0 rounded-full border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition group-hover:bg-primary group-hover:text-white sm:inline-flex">
                           Read Full Opinion
                         </span>
                       </div>
@@ -159,21 +158,21 @@ export function OpinionPage() {
                 <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
                   <span className="h-px w-6 bg-accent" /> Latest
                 </p>
-                <div className="grid gap-5 sm:grid-cols-2">
+                <div className="grid min-w-0 gap-5 sm:grid-cols-2">
                   {visibleLatest.map((article) => (
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
+                      className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
                     >
                       <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
                         {article.category}
                       </span>
-                      <h3 className="mt-2 line-clamp-3 font-serif text-lg font-bold leading-snug text-ink transition group-hover:text-accent">
+                      <h3 className="mt-2 line-clamp-3 break-words font-serif text-lg font-bold leading-snug text-ink transition group-hover:text-accent">
                         {article.title}
                       </h3>
                       {article.subtitle && (
-                        <p className="mt-2 line-clamp-2 text-sm text-slate-500">{article.subtitle}</p>
+                        <p className="mt-2 line-clamp-2 break-words text-sm text-slate-500">{article.subtitle}</p>
                       )}
                       <div className="mt-5 border-t border-slate-100 pt-4">
                         <Byline article={article} size="sm" />
@@ -203,7 +202,7 @@ export function OpinionPage() {
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      className="flex items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
+                      className="flex min-w-0 items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
                     >
                       <AuthorAvatar name={article.author} size="sm" />
                       <div className="min-w-0 flex-1">
@@ -213,7 +212,7 @@ export function OpinionPage() {
                         <h3 className="mt-0.5 truncate font-bold text-ink">{article.title}</h3>
                         <p className="text-xs text-slate-400">{article.author} · {article.date}</p>
                       </div>
-                    </Link> 
+                    </Link>
                   ))}
                 </div>
 
