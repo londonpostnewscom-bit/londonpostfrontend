@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -13,6 +12,15 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 const FEATURED_BATCH = 6;
 const GRID_BATCH = 4;
 const CROSS_POST_PAGES = ['world', 'editors-picks', 'in-focus'];
+
+// Stable reference for the "nothing to show yet" case. Using a fresh `[]`
+// literal inline in the render body creates a NEW array on every single
+// render, and since `source`/`archivedAll` below are memoized off of it,
+// that fake "change" cascades into an infinite render loop while this
+// page is still loading — this is exactly what "Warning: Maximum update
+// depth exceeded... at SectionPage" in the console was reporting. One
+// shared empty array fixes it — same array in, same memoized result out.
+const EMPTY_ARTICLES: Article[] = [];
 
 // The public nav builds each section link by auto-slugifying its label
 // (lowercase, "&" -> "and", non-alphanumerics -> "-"). Most of the time
@@ -111,10 +119,10 @@ export function SectionPage() {
   const title = menuMatch ? menuMatch.label : toTitle(rawSlug);
 
   const cached = sectionCache.get(slug);
-  const [apiArticles, setApiArticles] = useState<Article[]>(cached || []);
+  const [apiArticles, setApiArticles] = useState<Article[]>(cached || EMPTY_ARTICLES);
   const [apiLoaded, setApiLoaded] = useState(!!cached);
   const [loading, setLoading] = useState(!cached);
-  const [filteredArchived, setFilteredArchived] = useState<Article[]>([]);
+  const [filteredArchived, setFilteredArchived] = useState<Article[]>(EMPTY_ARTICLES);
 
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
   const [featuredVisible, setFeaturedVisible] = useState(FEATURED_BATCH);
@@ -165,12 +173,15 @@ export function SectionPage() {
 
   // Static fallback data only ever applies AFTER the real fetch has
   // finished and genuinely came back empty — never during the loading
-  // window itself. Previously this fell back to static/demo articles
-  // while still loading, which could flash unrelated placeholder content
-  // before the real data arrived; now that window shows the skeleton
-  // instead, and only settles on static data as a true "nothing here yet"
-  // fallback.
-  const source = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : []);
+  // window itself. Uses the shared EMPTY_ARTICLES constant (not a fresh
+  // `[]`) so this doesn't produce a new array reference on every render
+  // while loading — see the comment on EMPTY_ARTICLES above. That stray
+  // new-array-every-render was the actual cause of the "Maximum update
+  // depth exceeded" warning: it fed into the useMemo below, which then
+  // fed into the useEffect further down, so every render looked like
+  // "the data changed," triggering setState, triggering another render,
+  // forever, until loading finished.
+  const source = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : EMPTY_ARTICLES);
 
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Memoized so it only changes when the article list actually changes,
@@ -214,7 +225,7 @@ export function SectionPage() {
           {latestAll.length > 0 && (
             <div>
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Latest</p>
-              <PaginatedArticles articles={visibleLatest} />
+              <PaginatedArticles articles={visibleLatest} sourceHint="section" />
 
               {canLoadMoreLatest && (
                 <div className="mt-6 flex justify-center">
@@ -232,7 +243,7 @@ export function SectionPage() {
           {featuredAll.length > 0 && (
             <div className="mt-10">
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Featured — {new Date().getFullYear()}</p>
-              <PaginatedArticles articles={visibleFeatured} />
+              <PaginatedArticles articles={visibleFeatured} sourceHint="section" />
 
               {canLoadMoreFeatured && (
                 <div className="mt-6 flex justify-center">
@@ -261,7 +272,7 @@ export function SectionPage() {
 
             {filteredArchived.length > 0 ? (
               <>
-                <PaginatedArticles articles={visibleArchived} />
+                <PaginatedArticles articles={visibleArchived} sourceHint="section" />
 
                 {canLoadMoreArchived && (
                   <div className="mt-6 flex justify-center">
