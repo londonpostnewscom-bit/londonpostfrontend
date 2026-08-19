@@ -118,6 +118,7 @@ export function OpinionPage() {
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
+                      state={{ source: 'section' }}
                       className="group block min-w-0 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg sm:p-9"
                     >
                       <span className="inline-block text-xs font-bold uppercase tracking-widest text-accent">
@@ -163,6 +164,7 @@ export function OpinionPage() {
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
+                      state={{ source: 'section' }}
                       className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
                     >
                       <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
@@ -202,6 +204,7 @@ export function OpinionPage() {
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
+                      state={{ source: 'section' }}
                       className="flex min-w-0 items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
                     >
                       <AuthorAvatar name={article.author} size="sm" />
