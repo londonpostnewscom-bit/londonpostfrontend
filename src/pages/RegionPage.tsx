@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -10,6 +9,15 @@ import { slugify } from '../utils/helpers';
 import { bucketArticles } from '../utils/articleBuckets';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
+// Stable reference for the "nothing to show yet" case. Using a fresh `[]`
+// literal inline in the render body creates a NEW array on every single
+// render, and since `sourceArticles`/`archivedAll` below are memoized off
+// of it, that fake "change" cascades into an infinite render loop while
+// this page is still loading (React logs this as "Maximum update depth
+// exceeded"). One shared empty array fixes it — same array in, same
+// memoized result out, no spurious re-renders.
+const EMPTY_ARTICLES: Article[] = [];
 
 const REGION_META: Record<string, { label: string; description: string }> = {
   asia:       { label: 'Asia',        description: 'East Asia, South Asia, Southeast Asia and Central Asia.' },
@@ -90,10 +98,10 @@ export function RegionPage() {
 
   const key = cacheKey(area, selectedCategory);
   const cached = regionCache.get(key);
-  const [apiArticles, setApiArticles] = useState<Article[]>(cached || []);
+  const [apiArticles, setApiArticles] = useState<Article[]>(cached || EMPTY_ARTICLES);
   const [apiLoaded, setApiLoaded] = useState(!!cached);
   const [loading, setLoading] = useState(!cached);
-  const [filteredArchived, setFilteredArchived] = useState<Article[]>([]);
+  const [filteredArchived, setFilteredArchived] = useState<Article[]>(EMPTY_ARTICLES);
 
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
   const [featuredVisible, setFeaturedVisible] = useState(FEATURED_BATCH);
@@ -151,7 +159,10 @@ export function RegionPage() {
   // Static fallback only applies once the real fetch has finished and
   // genuinely came back empty — not during the loading window, which now
   // shows the skeleton instead of a flash of unrelated placeholder data.
-  const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : []);
+  // Uses the shared EMPTY_ARTICLES constant (not a fresh `[]`) so this
+  // doesn't produce a new array reference on every render while loading —
+  // see the comment on EMPTY_ARTICLES above for why that matters.
+  const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : EMPTY_ARTICLES);
 
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Recomputed only when the underlying article list actually changes,
@@ -239,7 +250,7 @@ export function RegionPage() {
           {latestAll.length > 0 && (
             <div>
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Latest</p>
-              <PaginatedArticles articles={visibleLatest} />
+              <PaginatedArticles articles={visibleLatest} sourceHint="region" />
 
               {canLoadMoreLatest && (
                 <div className="mt-6 flex justify-center">
@@ -257,7 +268,7 @@ export function RegionPage() {
           {featuredAll.length > 0 && (
             <div className="mt-10">
               <p className="mb-4 text-xs font-bold uppercase tracking-widest text-accent">Featured — {new Date().getFullYear()}</p>
-              <PaginatedArticles articles={visibleFeatured} />
+              <PaginatedArticles articles={visibleFeatured} sourceHint="region" />
 
               {canLoadMoreFeatured && (
                 <div className="mt-6 flex justify-center">
@@ -286,7 +297,7 @@ export function RegionPage() {
 
             {filteredArchived.length > 0 ? (
               <>
-                <PaginatedArticles articles={visibleArchived} />
+                <PaginatedArticles articles={visibleArchived} sourceHint="region" />
 
                 {canLoadMoreArchived && (
                   <div className="mt-6 flex justify-center">
