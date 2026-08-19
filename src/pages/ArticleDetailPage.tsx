@@ -1,7 +1,7 @@
-
 import { useEffect, useState, useRef } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
+import { AuthorAvatar } from '../components/AuthorAvatar';
 import { cld } from '../utils/Cloudinary';
 import { ArticleSkeleton } from '../components/PageSkeleton';
 
@@ -483,6 +483,14 @@ function ShareSidebar({ title }: { title: string }) {
 export function ArticleDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  // When we arrived here via one of our own <Link> components, the source
+  // collection ('region' or 'section') is passed along as router state —
+  // see the Link updates below. That lets us query the RIGHT endpoint
+  // first and skip the guaranteed-404 guess entirely for normal in-site
+  // navigation. Direct URL visits / refreshes / shared links won't have
+  // this hint, so those still fall back to trying both (rare case).
+  const sourceHint = (location.state as { source?: 'region' | 'section' } | null)?.source;
   const [article, setArticle] = useState<any>(null);
   const [related, setRelated] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -506,21 +514,41 @@ export function ArticleDetailPage() {
     setRelated([]);
     setNotFound(false);
 
-    const tryFetch = async () => {
-      const [regionResult, sectionResult] = await Promise.allSettled([
-        fetch(`${API_URL}/region-articles/${id}`).then(r => (r.ok ? r.json() : null)),
-        fetch(`${API_URL}/section-articles/${id}`).then(r => (r.ok ? r.json() : null)),
-      ]);
+    const fetchRegion = () => fetch(`${API_URL}/region-articles/${id}`).then(r => (r.ok ? r.json() : null));
+    const fetchSection = () => fetch(`${API_URL}/section-articles/${id}`).then(r => (r.ok ? r.json() : null));
 
+    const tryFetch = async () => {
       let art: any = null;
       let source = '';
 
-      if (regionResult.status === 'fulfilled' && regionResult.value) {
-        art = regionResult.value;
-        source = 'region';
-      } else if (sectionResult.status === 'fulfilled' && sectionResult.value) {
-        art = sectionResult.value;
-        source = 'section';
+      if (sourceHint === 'region' || sourceHint === 'section') {
+        // We know which collection this came from — query only that one.
+        // No wrong-guess request means no 404 in the console for the
+        // normal case of clicking a link somewhere on the site.
+        const first = sourceHint === 'region' ? await fetchRegion() : await fetchSection();
+        if (first) {
+          art = first;
+          source = sourceHint;
+        } else {
+          // Hint turned out stale (rare — e.g. content moved sections).
+          // Fall back to the other collection.
+          const fallbackSource = sourceHint === 'region' ? 'section' : 'region';
+          const fallback = fallbackSource === 'region' ? await fetchRegion() : await fetchSection();
+          if (fallback) { art = fallback; source = fallbackSource; }
+        }
+      } else {
+        // No hint available — direct URL visit, browser refresh, or a
+        // shared/bookmarked link. We genuinely don't know which collection
+        // holds this ID, so we ask both in parallel as before. This path
+        // is uncommon compared to normal in-site clicks.
+        const [regionResult, sectionResult] = await Promise.allSettled([fetchRegion(), fetchSection()]);
+        if (regionResult.status === 'fulfilled' && regionResult.value) {
+          art = regionResult.value;
+          source = 'region';
+        } else if (sectionResult.status === 'fulfilled' && sectionResult.value) {
+          art = sectionResult.value;
+          source = 'section';
+        }
       }
 
       if (!art) { setNotFound(true); setLoading(false); return; }
@@ -588,6 +616,7 @@ export function ArticleDetailPage() {
 
   const content = article.content || '';
   const isVideo = article.section === 'video' && article.videoId;
+  const isOpinion = article.section === 'opinion';
   const hasBlocks = Array.isArray(article.blocks) && article.blocks.length > 0;
 
   return (
@@ -661,18 +690,25 @@ export function ArticleDetailPage() {
 
             {article.subtitle && <p className="mt-3 text-lg text-slate-600">{article.subtitle}</p>}
 
-            <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-slate-400">
-              <span>By <span className="font-semibold text-slate-600">{article.author}</span></span>
-              <span>·</span>
-              <span>{article.date}</span>
-              {(article.region || article.subCategory) && (
-                <>
-                  <span>·</span>
-                  <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
-                    {article.subCategory || article.region}
-                  </span>
-                </>
-              )}
+            {/* Byline — author photo only shows for Opinion articles, since
+                that's the only place author photos are used across the site
+                (matches the OpinionPage listing, which sources the same
+                AuthorAvatar/useAuthorPhotos pair). */}
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              {isOpinion && <AuthorAvatar name={article.author} size="sm" />}
+              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
+                <span>By <span className="font-semibold text-slate-600">{article.author}</span></span>
+                <span>·</span>
+                <span>{article.date}</span>
+                {(article.region || article.subCategory) && (
+                  <>
+                    <span>·</span>
+                    <span className="rounded-full bg-accent/10 px-2 py-0.5 text-xs font-semibold text-accent">
+                      {article.subCategory || article.region}
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
 
             <hr className="my-8 border-slate-100" />
@@ -715,7 +751,7 @@ export function ArticleDetailPage() {
                     const isRelVideo = rel.section === 'video';
                     const linkTo = isRelVideo ? `/video/${relId}` : `/article/${relId}`;
                     return (
-                      <Link key={relId} to={linkTo}
+                      <Link key={relId} to={linkTo} state={!isRelVideo ? { source: article.region ? 'region' : 'section' } : undefined}
                         className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
                         {rel.imageUrl && (
                           <div className="aspect-[4/3] overflow-hidden">
