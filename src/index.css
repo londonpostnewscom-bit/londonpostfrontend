@@ -49,14 +49,6 @@ body {
   .input {
     @apply rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400;
   }
-}
-@layer components {
-  .label {
-    @apply block text-xs font-medium text-gray-600 mb-1;
-  }
-  .input {
-    @apply rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-red-400 focus:ring-1 focus:ring-red-400;
-  }
 
   /* Article content rendered from rich text editor */
   .prose-article {
@@ -93,5 +85,29 @@ body {
   }
   .prose-article blockquote {
     @apply border-l-4 border-accent/40 pl-4 italic text-slate-500 my-4;
+  }
+
+  /* Inline images set via the RichTextEditor's Left/Center/Right toolbar.
+     These classes were already being saved correctly into article HTML
+     (see sanitize.ts's ALLOWED_IMG_CLASSES) and already worked inside the
+     admin editor's own preview box — but that preview's float/size rules
+     were scoped only to the editor itself (Tailwind arbitrary variants on
+     its own wrapper), so they never applied here on the live page. These
+     are the real, generally-usable equivalents. */
+  .prose-article img.rte-img-left {
+    @apply float-left mr-4 mb-3 mt-1 max-w-[45%] rounded-lg h-auto;
+  }
+  .prose-article img.rte-img-right {
+    @apply float-right ml-4 mb-3 mt-1 max-w-[45%] rounded-lg h-auto;
+  }
+  .prose-article img.rte-img-center {
+    @apply block mx-auto my-4 max-w-full rounded-lg h-auto;
+  }
+  /* Plain <img> with no rte- class at all (older content, or images
+     inserted some other way) falls back to the same full-width centered
+     treatment as rte-img-center, so nothing regresses for existing
+     articles saved before alignment support existed. */
+  .prose-article img:not([class*="rte-img-"]) {
+    @apply block mx-auto my-4 max-w-full rounded-lg h-auto;
   }
 }
