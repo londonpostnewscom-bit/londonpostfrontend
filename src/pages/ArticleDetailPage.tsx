@@ -183,17 +183,42 @@ function ReadMoreButtonBlock({ url, label }: { url: string; label?: string }) {
   );
 }
 
-function ArticleBlock({ block }: { block: { type: string; value?: string; url?: string; videoUrl?: string; label?: string } }) {
+function ArticleBlock({ block }: { block: { type: string; value?: string; url?: string; videoUrl?: string; label?: string; align?: 'left' | 'center' | 'right'; size?: 'small' | 'medium' | 'full'; caption?: string } }) {
   if (block.type === 'image' && block.url) {
+    const align = block.align || 'center';
+    const size = block.size || 'full';
+
+    // Full width always spans the column, centered, regardless of the
+    // align setting (matches the warning shown in the admin block editor).
+    // Left/right only take effect when size is small or medium — that's
+    // what lets text from surrounding text blocks wrap around it,
+    // WordPress-style, since the figure is floated rather than block-level.
+    const isFloated = align !== 'center' && size !== 'full';
+
+    const sizeClass =
+      size === 'small'  ? 'w-full max-w-[220px] sm:max-w-[260px]' :
+      size === 'medium' ? 'w-full max-w-[320px] sm:max-w-[380px]' :
+                           'w-full';
+
+    const floatClass =
+      align === 'left'  && isFloated ? 'float-left mr-6 mb-4'  :
+      align === 'right' && isFloated ? 'float-right ml-6 mb-4' :
+                                        'mx-auto';
+
     return (
-      <figure className="my-8 w-full">
+      <figure className={`my-6 ${isFloated ? sizeClass : 'w-full'} ${floatClass}`}>
         <img
-          src={cld(block.url, 1200)}
-          alt=""
+          src={cld(block.url, isFloated ? 500 : 1200)}
+          alt={block.caption || ''}
           loading="lazy"
           className="w-full rounded-2xl shadow-sm"
           style={{ height: 'auto', display: 'block' }}
         />
+        {block.caption?.trim() && (
+          <figcaption className="mt-2 text-center text-xs italic text-slate-500">
+            {block.caption}
+          </figcaption>
+        )}
       </figure>
     );
   }
