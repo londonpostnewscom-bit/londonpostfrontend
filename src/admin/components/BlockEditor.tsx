@@ -1,11 +1,12 @@
-
-
 import { useState, useRef, useEffect } from 'react';
 import { RichTextEditor } from './RichTextEditor';
 
+export type ImageAlign = 'left' | 'center' | 'right';
+export type ImageSize = 'small' | 'medium' | 'full';
+
 export type Block =
   | { id: string; type: 'text'; value: string }
-  | { id: string; type: 'image'; url?: string; cloudinaryId?: string; file?: File; preview?: string }
+  | { id: string; type: 'image'; url?: string; cloudinaryId?: string; file?: File; preview?: string; align?: ImageAlign; size?: ImageSize; caption?: string }
   | { id: string; type: 'video'; videoUrl: string }
   | { id: string; type: 'readmore'; url: string; label?: string };
 
@@ -13,7 +14,7 @@ let _id = 0;
 const uid = () => `blk_${++_id}_${Date.now()}`;
 
 function mkText():     Block { return { id: uid(), type: 'text',     value: '' }; }
-function mkImage():    Block { return { id: uid(), type: 'image' }; }
+function mkImage():    Block { return { id: uid(), type: 'image', align: 'center', size: 'full', caption: '' }; }
 function mkVideo():    Block { return { id: uid(), type: 'video',    videoUrl: '' }; }
 function mkReadMore(): Block { return { id: uid(), type: 'readmore', url: '', label: 'Read More' }; }
 
@@ -47,14 +48,46 @@ function EmbedToolbar({ onUp, onDown, onRemove, canUp, canDown }: {
   );
 }
 
-/* ─── Inline image embed ── */
-function ImageEmbed({ block, onFile, onRemove, onUp, onDown, canUp, canDown }: {
+/* ─── Tiny segmented control used for both Align and Size pickers ── */
+function SegmentedControl<T extends string>({ options, value, onChange }: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5">
+      {options.map(opt => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+            value === opt.value ? 'bg-indigo-500 text-white' : 'text-gray-500 hover:bg-gray-50'
+          }`}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* ─── Inline image embed — now with WordPress-style Align / Size /
+     Caption controls, shown once an image is actually attached. Align
+     controls how it floats in the article body (left/right wraps text
+     around it like a WordPress inline image; center behaves as before,
+     full-width block). Size controls how large it renders when NOT
+     center-full (small/medium ~ classic "thumbnail" sizes; full ignores
+     the align float and always spans the column). ── */
+function ImageEmbed({ block, onFile, onPatch, onRemove, onUp, onDown, canUp, canDown }: {
   block: Extract<Block, { type: 'image' }>;
   onFile: (file: File, preview: string) => void;
+  onPatch: (patch: Partial<Extract<Block, { type: 'image' }>>) => void;
   onRemove: () => void; onUp: () => void; onDown: () => void; canUp: boolean; canDown: boolean;
 }) {
   const inp = useRef<HTMLInputElement>(null);
   const src = block.preview || block.url || '';
+  const align = block.align || 'center';
+  const size = block.size || 'full';
 
   return (
     <div className="group relative my-3 rounded-lg border border-gray-100 bg-gray-50/50 p-2">
@@ -80,6 +113,46 @@ function ImageEmbed({ block, onFile, onRemove, onUp, onDown, canUp, canDown }: {
           e.target.value = '';
         }}
       />
+
+      {src && (
+        <div className="mt-3 space-y-2.5 border-t border-gray-100 pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 flex-shrink-0 text-[11px] font-semibold text-gray-500">Position</span>
+            <SegmentedControl
+              value={align}
+              onChange={(v) => onPatch({ align: v })}
+              options={[
+                { value: 'left',   label: '⬅ Left' },
+                { value: 'center', label: '⬛ Center' },
+                { value: 'right',  label: 'Right ➡' },
+              ]}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-16 flex-shrink-0 text-[11px] font-semibold text-gray-500">Size</span>
+            <SegmentedControl
+              value={size}
+              onChange={(v) => onPatch({ size: v })}
+              options={[
+                { value: 'small',  label: 'Small' },
+                { value: 'medium', label: 'Medium' },
+                { value: 'full',   label: 'Full width' },
+              ]}
+            />
+            {align !== 'center' && size === 'full' && (
+              <span className="text-[10px] text-amber-600">Full width ignores Left/Right — it'll still show centered.</span>
+            )}
+          </div>
+          <div>
+            <input
+              value={block.caption || ''}
+              onChange={e => onPatch({ caption: e.target.value })}
+              placeholder="Optional caption — shown in small text under the image"
+              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 placeholder-gray-400 focus:border-indigo-400 focus:outline-none focus:ring-1 focus:ring-indigo-200"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -262,6 +335,9 @@ export function BlockEditor({ value, onChange }: {
   const setFile     = (id: string, file: File, preview: string) =>
     update(b => b.map(bl => bl.id === id ? { ...bl, file, preview } as Block : bl));
 
+  const patchImage  = (id: string, patch: Partial<Extract<Block, { type: 'image' }>>) =>
+    update(b => b.map(bl => bl.id === id ? { ...bl, ...patch }      as Block : bl));
+
   const setVideoUrl = (id: string, videoUrl: string) =>
     update(b => b.map(bl => bl.id === id ? { ...bl, videoUrl }      as Block : bl));
 
@@ -285,6 +361,7 @@ export function BlockEditor({ value, onChange }: {
                 <ImageEmbed
                   block={block as Extract<Block, { type: 'image' }>}
                   onFile={(f, p) => setFile(block.id, f, p)}
+                  onPatch={(patch) => patchImage(block.id, patch)}
                   onRemove={() => remove(block.id)}
                   onUp={() => move(block.id, -1)} onDown={() => move(block.id, 1)}
                   canUp={idx > 0} canDown={idx < value.length - 1}
@@ -328,7 +405,9 @@ export function BlockEditor({ value, onChange }: {
   );
 }
 
-/* ─── Serializer (used in parent form) — UNCHANGED, backend contract intact ── */
+/* ─── Serializer (used in parent form) — now also carries align/size/caption
+     for image blocks through to the backend, both for freshly-uploaded
+     files (via the placeholder fieldname path) and already-hosted images. ── */
 export function serializeBlocks(blocks: Block[]): {
   json: string;
   files: { fieldname: string; file: File }[];
@@ -349,22 +428,29 @@ export function serializeBlocks(blocks: Block[]): {
       return { type: 'readmore', url: b.url, label: b.label?.trim() ? b.label : 'Read More' };
     }
 
+    const align = b.align || 'center';
+    const size = b.size || 'full';
+    const caption = b.caption || '';
+
     if (b.type === 'image' && b.file) {
       const fieldname = `block_img_${imgCount++}`;
       files.push({ fieldname, file: b.file });
-      return { type: 'image', placeholder: fieldname, url: '', cloudinaryId: '' };
+      return { type: 'image', placeholder: fieldname, url: '', cloudinaryId: '', align, size, caption };
     }
     return {
       type: 'image',
       url: (b as any).url || '',
       cloudinaryId: (b as any).cloudinaryId || '',
+      align, size, caption,
     };
   });
 
   return { json: JSON.stringify(json), files };
 }
 
-/* ─── Deserializer (used when editing existing article) — UNCHANGED ── */
+/* ─── Deserializer (used when editing existing article) — reads back
+     align/size/caption, defaulting to the original center/full/'' so any
+     article saved before this change still renders exactly as before. ── */
 export function deserializeBlocks(raw: any[]): Block[] {
   if (!Array.isArray(raw)) return [];
   return raw.map(b => {
@@ -382,6 +468,9 @@ export function deserializeBlocks(raw: any[]): Block[] {
       type: 'image' as const,
       url: b.url || '',
       cloudinaryId: b.cloudinaryId || '',
+      align: (b.align === 'left' || b.align === 'right' || b.align === 'center') ? b.align : 'center',
+      size: (b.size === 'small' || b.size === 'medium' || b.size === 'full') ? b.size : 'full',
+      caption: b.caption || '',
     };
   });
 }
