@@ -1,4 +1,3 @@
-
 const ALLOWED_TAGS = ['p', 'b', 'strong', 'i', 'em', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'blockquote', 'a', 'img'];
 const BLOCK_TAGS = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'div']; // div treated as a paragraph-like block
 
@@ -119,17 +118,32 @@ export function sanitizeHtml(dirty: string): string {
       if (alt) img.setAttribute('alt', alt);
 
       // Preserve RichTextEditor's own alignment class (rte-img-left/right/
-      // center) if present — needed for the editor's float/center CSS to
-      // apply. Falls back to the inline-style approach below regardless,
-      // so the image is never invisible even without the class.
+      // center) if present — needed for the editor's (and the live site's)
+      // float/center CSS to apply.
       const cls = el.getAttribute('class');
-      if (cls && ALLOWED_IMG_CLASSES.has(cls)) img.setAttribute('class', cls);
+      const hasAlignClass = !!cls && ALLOWED_IMG_CLASSES.has(cls);
+      if (hasAlignClass) img.setAttribute('class', cls as string);
 
+      // FIXED: previously, any image with no existing inline style (which
+      // is every rte-img-left/right/center image — they only ever carry a
+      // class, never a style attribute) fell through to a hardcoded
+      // fallback: 'max-width:100%; ... display:block;'. An inline style
+      // always wins over a CSS class rule regardless of specificity
+      // tricks, so that fallback silently overrode the class's float and
+      // 45%-width every time content passed through this sanitizer —
+      // which happens on every editor load. The image LOOKED like it had
+      // "reverted" to full-width/center on reopen, even though the class
+      // itself was preserved correctly the whole time; the fallback style
+      // sitting right next to it was just winning the visual battle.
+      // Now: only apply that fallback when there's no alignment class to
+      // defer to, so left/right images are styled purely by CSS (their
+      // class), and plain/centered images keep exactly the old behavior.
       const safeStyle = sanitizeImgStyle(el.getAttribute('style'));
-      img.setAttribute(
-        'style',
-        safeStyle || 'max-width:100%;height:auto;border-radius:8px;margin:12px 0;display:block;'
-      );
+      if (safeStyle) {
+        img.setAttribute('style', safeStyle);
+      } else if (!hasAlignClass) {
+        img.setAttribute('style', 'max-width:100%;height:auto;border-radius:8px;margin:12px 0;display:block;');
+      }
 
       return img;
     }
