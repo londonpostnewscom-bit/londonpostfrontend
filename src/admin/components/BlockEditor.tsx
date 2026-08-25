@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { RichTextEditor } from './RichTextEditor';
 
 export type ImageAlign = 'left' | 'center' | 'right';
-export type ImageSize = 'small' | 'medium' | 'full';
+export type ImageSize = 'small' | 'medium' | 'full'; 
 
 export type Block =
   | { id: string; type: 'text'; value: string }
