@@ -272,6 +272,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   // and were already allowlisted all the way through to the live article
   // page, there just wasn't a UI control to actually apply them.
   const activeImgRef = useRef<HTMLImageElement | null>(null);
+  const activeFigureRef = useRef<HTMLElement | null>(null);
   const [imgToolbarPos, setImgToolbarPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
@@ -388,7 +389,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
       document.execCommand(
         'insertHTML',
         false,
-        `<img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-center" />`
+        `<figure class="rte-img-center" contenteditable="false"><img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-inner" /><figcaption class="rte-caption" contenteditable="true" data-placeholder="Add a caption (optional)"></figcaption></figure>`
       );
 
       handleInput();
@@ -399,17 +400,35 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   };
 
-  // Clicking any image already in the body selects it and shows a small
-  // floating Align / Replace / Remove toolbar right above it. Clicking
+  // Clicking any image (bare, or the new figure+caption wrapper) selects
+  // it and shows a small floating Align / Replace / Remove toolbar right
+  // above it. For a figure-wrapped image, the toolbar targets the whole
+  // figure (so alignment floats image+caption together as one unit) while
+  // Replace still updates the inner <img>'s src directly. Clicking
   // anywhere else (including a different image) closes/moves it.
   const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
+    const figure = target.closest('figure') as HTMLElement | null;
+
+    if (figure && editorRef.current?.contains(figure)) {
+      const rect = figure.getBoundingClientRect();
+      const parentRect = editorRef.current!.getBoundingClientRect();
+      activeFigureRef.current = figure;
+      activeImgRef.current = figure.querySelector('img');
+      setImgToolbarPos({ top: rect.top - parentRect.top - 36, left: rect.left - parentRect.left });
+      return;
+    }
+
     if (target.tagName === 'IMG') {
+      // Legacy bare <img> with no figure wrapper (from before captions
+      // existed, or from pasted content) — same toolbar, just no caption.
       const rect = target.getBoundingClientRect();
       const parentRect = editorRef.current!.getBoundingClientRect();
+      activeFigureRef.current = null;
       activeImgRef.current = target as HTMLImageElement;
       setImgToolbarPos({ top: rect.top - parentRect.top - 36, left: rect.left - parentRect.left });
     } else {
+      activeFigureRef.current = null;
       activeImgRef.current = null;
       setImgToolbarPos(null);
     }
@@ -444,17 +463,22 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   };
 
   const handleRemoveImage = () => {
-    activeImgRef.current?.remove();
+    if (activeFigureRef.current) {
+      activeFigureRef.current.remove();
+    } else {
+      activeImgRef.current?.remove();
+    }
     activeImgRef.current = null;
+    activeFigureRef.current = null;
     setImgToolbarPos(null);
     handleInput();
   };
 
   const handleAlignImage = (align: 'left' | 'center' | 'right') => {
-    const img = activeImgRef.current;
-    if (!img) return;
-    img.classList.remove('rte-img-left', 'rte-img-center', 'rte-img-right');
-    img.classList.add(align === 'left' ? 'rte-img-left' : align === 'right' ? 'rte-img-right' : 'rte-img-center');
+    const target: HTMLElement | null = activeFigureRef.current || activeImgRef.current;
+    if (!target) return;
+    target.classList.remove('rte-img-left', 'rte-img-center', 'rte-img-right');
+    target.classList.add(align === 'left' ? 'rte-img-left' : align === 'right' ? 'rte-img-right' : 'rte-img-center');
     handleInput();
   };
 
@@ -539,6 +563,12 @@ export function RichTextEditor({ value, onChange, placeholder }: {
             [&_img.rte-img-left]:float-left [&_img.rte-img-left]:mr-4 [&_img.rte-img-left]:mb-3 [&_img.rte-img-left]:max-w-[45%] [&_img.rte-img-left]:rounded-lg [&_img.rte-img-left]:h-auto
             [&_img.rte-img-right]:float-right [&_img.rte-img-right]:ml-4 [&_img.rte-img-right]:mb-3 [&_img.rte-img-right]:max-w-[45%] [&_img.rte-img-right]:rounded-lg [&_img.rte-img-right]:h-auto
             [&_img.rte-img-center]:block [&_img.rte-img-center]:mx-auto [&_img.rte-img-center]:my-3 [&_img.rte-img-center]:max-w-full [&_img.rte-img-center]:rounded-lg [&_img.rte-img-center]:h-auto
+            [&_figure.rte-img-left]:float-left [&_figure.rte-img-left]:mr-4 [&_figure.rte-img-left]:mb-3 [&_figure.rte-img-left]:max-w-[45%]
+            [&_figure.rte-img-right]:float-right [&_figure.rte-img-right]:ml-4 [&_figure.rte-img-right]:mb-3 [&_figure.rte-img-right]:max-w-[45%]
+            [&_figure.rte-img-center]:block [&_figure.rte-img-center]:mx-auto [&_figure.rte-img-center]:my-3 [&_figure.rte-img-center]:max-w-full
+            [&_figure_img]:block [&_figure_img]:w-full [&_figure_img]:rounded-lg [&_figure_img]:h-auto [&_figure_img]:cursor-pointer
+            [&_figure_figcaption]:mt-1.5 [&_figure_figcaption]:block [&_figure_figcaption]:text-center [&_figure_figcaption]:text-xs [&_figure_figcaption]:italic [&_figure_figcaption]:text-gray-500 [&_figure_figcaption]:outline-none [&_figure_figcaption]:cursor-text
+            [&_figure_figcaption]:empty:before:content-[attr(data-placeholder)] [&_figure_figcaption]:empty:before:text-gray-300
             [&_.rte-embed-youtube]:my-3 [&_.rte-embed-youtube]:flex [&_.rte-embed-youtube]:h-28 [&_.rte-embed-youtube]:items-center [&_.rte-embed-youtube]:justify-center [&_.rte-embed-youtube]:rounded-lg [&_.rte-embed-youtube]:border [&_.rte-embed-youtube]:border-red-200 [&_.rte-embed-youtube]:bg-red-50 [&_.rte-embed-youtube]:text-xs [&_.rte-embed-youtube]:font-semibold [&_.rte-embed-youtube]:text-red-500 [&_.rte-embed-youtube]:before:content-['▶_YouTube_video_attached']
             [&_.rte-embed-vimeo]:my-3 [&_.rte-embed-vimeo]:flex [&_.rte-embed-vimeo]:h-28 [&_.rte-embed-vimeo]:items-center [&_.rte-embed-vimeo]:justify-center [&_.rte-embed-vimeo]:rounded-lg [&_.rte-embed-vimeo]:border [&_.rte-embed-vimeo]:border-blue-200 [&_.rte-embed-vimeo]:bg-blue-50 [&_.rte-embed-vimeo]:text-xs [&_.rte-embed-vimeo]:font-semibold [&_.rte-embed-vimeo]:text-blue-500 [&_.rte-embed-vimeo]:before:content-['▶_Vimeo_video_attached']
             empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
