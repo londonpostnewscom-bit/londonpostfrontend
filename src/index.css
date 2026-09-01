@@ -110,4 +110,28 @@ body {
   .prose-article img:not([class*="rte-img-"]) {
     @apply block mx-auto my-4 max-w-full rounded-lg h-auto;
   }
+
+  /* Image + caption, inserted via the RichTextEditor's image tool as a
+     <figure><img/><figcaption/></figure>. The alignment class lives on
+     the figure (not the img) so the image and its caption float and
+     resize together as one unit. */
+  .prose-article figure.rte-img-left {
+    @apply float-left mr-4 mb-3 mt-1 max-w-[45%];
+  }
+  .prose-article figure.rte-img-right {
+    @apply float-right ml-4 mb-3 mt-1 max-w-[45%];
+  }
+  .prose-article figure.rte-img-center {
+    @apply block mx-auto my-4 max-w-full;
+  }
+  .prose-article figure img {
+    @apply block w-full rounded-lg h-auto;
+  }
+  .prose-article figure figcaption {
+    @apply mt-1.5 text-center text-xs italic text-slate-500;
+  }
+  /* An empty caption (left blank on purpose) shouldn't leave visible gap */
+  .prose-article figure figcaption:empty {
+    display: none;
+  }
 }
