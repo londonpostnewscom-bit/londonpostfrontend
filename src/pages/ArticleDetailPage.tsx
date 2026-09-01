@@ -7,7 +7,8 @@ import { ArticleSkeleton } from '../components/PageSkeleton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-
+// Per-article in-memory cache, same pattern as Home/Opinion — survives SPA
+// navigation, clears naturally on a real page reload.
 const articleCache = new Map<string, { article: any; related: any[] }>();
 
 function isHTML(str: string) {
@@ -39,7 +40,7 @@ function decodeAndStrip(html: string) {
     // can't be used to smuggle in arbitrary styling or scripting hooks.
     .replace(/\s*class=["']([^"']*)["']/gi, (_match, cls) => {
       const allowed = new Set([
-        'rte-img-left', 'rte-img-right', 'rte-img-center',
+        'rte-img-left', 'rte-img-right', 'rte-img-center', 'rte-caption',
         'rte-embed-youtube', 'rte-embed-vimeo',
       ]);
       return allowed.has((cls || '').trim()) ? ` class="${cls.trim()}"` : '';
