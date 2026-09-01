@@ -1,4 +1,4 @@
-const ALLOWED_TAGS = ['p', 'b', 'strong', 'i', 'em', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'blockquote', 'a', 'img'];
+const ALLOWED_TAGS = ['p', 'b', 'strong', 'i', 'em', 'u', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'blockquote', 'a', 'img', 'figure', 'figcaption'];
 const BLOCK_TAGS = ['p', 'h2', 'h3', 'ul', 'ol', 'li', 'blockquote', 'div']; // div treated as a paragraph-like block
 
 const SAFE_IMG_STYLE_PROPS = ['max-width', 'width', 'height', 'border-radius', 'margin', 'margin-top', 'margin-bottom', 'display'];
@@ -67,6 +67,8 @@ function normalizeImgSrc(src: string): string {
 }
 
 const ALLOWED_IMG_CLASSES = new Set(['rte-img-left', 'rte-img-right', 'rte-img-center']);
+const ALLOWED_CAPTION_CLASSES = new Set(['rte-caption']);
+const ALLOWED_CAPTION_CLASS = 'rte-caption';
 
 export function sanitizeHtml(dirty: string): string {
   const parser = new DOMParser();
@@ -146,6 +148,47 @@ export function sanitizeHtml(dirty: string): string {
       }
 
       return img;
+    }
+
+    // Figure wrapper (image + caption together) — inserted by the
+    // RichTextEditor's image tool as: <figure class="rte-img-left|
+    // center|right"><img class="rte-img-inner" .../><figcaption
+    // class="rte-caption">...</figcaption></figure>. Handled as its own
+    // branch (like img above) rather than falling through to the generic
+    // block-tag path, so the figure/figcaption structure and the
+    // alignment class survive sanitization intact — without this, the
+    // caption would silently vanish on every editor reload, the same bug
+    // class as the earlier image-alignment issue.
+    if (tag === 'figure') {
+      const cls = el.getAttribute('class');
+      const hasAlignClass = !!cls && ALLOWED_IMG_CLASSES.has(cls);
+      const newFigure = document.createElement('figure');
+      if (hasAlignClass) newFigure.setAttribute('class', cls as string);
+
+      el.childNodes.forEach((child) => {
+        if (child.nodeType === Node.ELEMENT_NODE && (child as Element).tagName.toLowerCase() === 'figcaption') {
+          const capEl = child as Element;
+          const capCls = capEl.getAttribute('class');
+          const figcaption = document.createElement('figcaption');
+          if (capCls && ALLOWED_CAPTION_CLASSES.has(capCls.trim())) {
+            figcaption.setAttribute('class', capCls.trim());
+          }
+          capEl.childNodes.forEach((n) => {
+            const cleanedChild = clean(n);
+            if (cleanedChild) figcaption.appendChild(cleanedChild);
+          });
+          newFigure.appendChild(figcaption);
+        } else {
+          const cleanedChild = clean(child);
+          if (cleanedChild) newFigure.appendChild(cleanedChild);
+        }
+      });
+
+      // A figure with no image left in it (e.g. someone deleted the img
+      // some other way) isn't worth keeping.
+      if (!newFigure.querySelector('img')) return null;
+
+      return newFigure;
     }
 
     // Process children first (needed for both branches below)
