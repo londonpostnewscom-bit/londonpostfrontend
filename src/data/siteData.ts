@@ -54,6 +54,7 @@ export const moreMenu = [
   { value: 'in-focus',           label: 'In Focus' },
   { value: 'aviation',           label: 'Aviation' },
   { value: 'kazakhstan-kurultai-elections-2026', label: 'kazakhstan-kurultai-elections-2026' },
+  { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026' },
 ];
 export const regionMenus: Record<string, string[]> = {
   asia:       ['East Asia', 'South Asia', 'Southeast Asia', 'Central Asia'],
