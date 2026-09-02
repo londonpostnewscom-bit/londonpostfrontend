@@ -126,6 +126,36 @@ function extractLines(root: Node): Line[] {
     if (tag === 'SCRIPT' || tag === 'STYLE') return;
     if (tag === 'BR') { current.push('<br>'); return; }
 
+    if (tag === 'FIGURE') {
+      // A pasted <figure><img/><figcaption>...</figcaption></figure> (very
+      // common when copying an article from another site — exactly what
+      // produced the plain italic paragraph under the image before this
+      // fix) is now converted into the SAME figure+figcaption markup our
+      // own image tool produces, instead of falling through to the
+      // generic block-tag path (which flattened the caption into its own
+      // separate <p><i>...</i></p>, disconnected from the image). This
+      // makes a pasted caption editable and styled identically to one
+      // typed fresh in the editor.
+      const imgEl = el.querySelector('img');
+      if (imgEl) {
+        const rawSrc = resolveImgSrc(imgEl);
+        if (rawSrc && isAcceptableImageSrc(rawSrc)) {
+          const src = normalizeImageSrc(rawSrc);
+          const alt = escapeHtml(imgEl.getAttribute('alt') || '');
+          const ownAlign = detectAlign(imgEl);
+          const align = ownAlign !== 'center' ? ownAlign : detectAlign(el);
+          const alignClass = align === 'left' ? 'rte-img-left' : align === 'right' ? 'rte-img-right' : 'rte-img-center';
+          const capEl = el.querySelector('figcaption');
+          const captionText = capEl ? escapeHtml((capEl.textContent || '').trim()) : '';
+          current.push(
+            `<figure class="${alignClass}" contenteditable="false"><img src="${escapeHtml(src)}" alt="${alt}" class="rte-img-inner" /><figcaption class="rte-caption" contenteditable="true" data-placeholder="Add a caption (optional)">${captionText}</figcaption></figure>`
+          );
+          pushLine('p');
+        }
+      }
+      return;
+    }
+
     if (tag === 'IMG') {
       const rawSrc = resolveImgSrc(el);
       if (!rawSrc || !isAcceptableImageSrc(rawSrc)) return;
@@ -389,8 +419,19 @@ export function RichTextEditor({ value, onChange, placeholder }: {
       document.execCommand(
         'insertHTML',
         false,
-        `<figure class="rte-img-center" contenteditable="false"><img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-inner" /><figcaption class="rte-caption" contenteditable="true" data-placeholder="Add a caption (optional)"></figcaption></figure>`
+        `<figure class="rte-img-center" contenteditable="false"><img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-inner" /><figcaption class="rte-caption" contenteditable="true" data-placeholder="Add a caption (optional)"></figcaption></figure><p><br></p>`
       );
+
+      // Auto-focus the caption right away so typing one is a single
+      // continuous action after picking the file — not a separate click.
+      // The trailing empty paragraph above guarantees there's always
+      // somewhere to land afterward (see handleEditorKeyDown below for
+      // the Enter-to-escape-the-caption behavior).
+      setTimeout(() => {
+        const captions = editorRef.current?.querySelectorAll('figcaption.rte-caption');
+        const last = captions && (captions[captions.length - 1] as HTMLElement | undefined);
+        last?.focus();
+      }, 0);
 
       handleInput();
     } catch (err: any) {
@@ -482,6 +523,40 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     handleInput();
   };
 
+  // Pressing Enter while typing a caption jumps out to the paragraph
+  // right after the image, instead of trying (and failing, since a
+  // figcaption is a single line) to insert a line break inside it. This
+  // is the same "Enter escapes the block" pattern used by Notion/
+  // WordPress's block editor, and it's what actually fixes "I can't get
+  // out of the caption box" — previously there was no way to leave a
+  // caption via the keyboard at all once focus landed inside it.
+  const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const active = document.activeElement as HTMLElement | null;
+    if (!active || !active.classList.contains('rte-caption') || e.key !== 'Enter') return;
+
+    e.preventDefault();
+    const figure = active.closest('figure');
+    let target = figure?.nextElementSibling as HTMLElement | null;
+
+    if (!target) {
+      // Shouldn't normally happen (a trailing paragraph is always
+      // inserted alongside a new image), but if the image sits at the
+      // very end of older content with nothing after it, create one.
+      target = document.createElement('p');
+      target.innerHTML = '<br>';
+      figure?.parentNode?.insertBefore(target, figure.nextSibling);
+    }
+
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    editorRef.current?.focus();
+    handleInput();
+  };
+
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>) => {
     e.preventDefault();
 
@@ -544,6 +619,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
           onBlur={() => { handleInput(); saveSelection(); }}
           onMouseUp={saveSelection}
           onKeyUp={saveSelection}
+          onKeyDown={handleEditorKeyDown}
           onPaste={handlePaste}
           onClick={handleEditorClick}
           data-placeholder={placeholder || 'Write or paste article content here...'}
