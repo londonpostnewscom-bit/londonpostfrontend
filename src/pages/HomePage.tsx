@@ -48,7 +48,7 @@ type CaucasusFeed = { armenia: Article[]; georgia: Article[]; azerbaijan: Articl
 type HomeFeedData = {
   uk: Article[]; ep: Article[]; inf: Article[]; intv: Article[];
   vid: any[]; op: Article[]; ca: Article[]; eu: Article[]; ru: Article[];
-  dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[]; hh: Article[]; kur: Article[];
+  dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[]; hh: Article[]; kur: Article[]; ng: Article[];
 };
 let homeFeedCache: HomeFeedData | null = null;
 
@@ -110,7 +110,7 @@ async function fetchRegionSubcategory(area: string, subCategory: string, limit =
 }
 
 async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
-  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi, hh, kur] = await Promise.all([
+  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi, hh, kur, ng] = await Promise.all([
     fetchSectionHome('uk', 4),
     fetchSectionHome('editors-picks', 4),
     fetchSectionHome('in-focus', 4),
@@ -128,8 +128,10 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
     fetchSectionHome('aviation', 5),
     fetchSectionHome('hidden-histories', 8),
     fetchSectionHome('kazakhstan-kurultai-elections-2026', 5),
+   fetchSectionHome('world-nomad-games-2026', 5),
+
   ]);
-  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi, hh, kur };
+  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi, hh, kur, ng };
 }
 
 function getYtThumb(videoId: string) {
@@ -628,6 +630,45 @@ function KurultaiSection({ articles }: { articles: Article[] }) {
   );
 }
 
+
+
+function NomadgamesSection({ articles }: { articles: Article[] }) {
+  if (!articles.length) return null;
+  const [lead, ...rest] = articles;
+  return (
+    <section className="bg-white py-16">
+      <div className="mx-auto max-w-7xl px-4 lg:px-6">
+        <CenterHeader tone="navy" title="World Nomad Games 2026" titleTo="/section/world-nomad-games-2026"
+        />
+        <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
+          <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
+            <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
+              {lead.image
+                ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
+                : <div className="h-full w-full bg-slate-100" />}
+            </div>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
+           
+            <div className="absolute inset-x-0 bottom-0 p-6 lg:p-8">
+              <CategoryTag category={lead.category} dark tone="navy" />
+              <h3 className="mt-2 text-2xl font-bold leading-tight text-white lg:text-3xl">{lead.title}</h3>
+              {lead.subtitle && <p className="mt-2 max-w-xl text-sm text-white/70 line-clamp-2">{lead.subtitle}</p>}
+              <p className="mt-3 text-xs text-white/50">{lead.author} · {lead.date}</p>
+            </div>
+          </Link>
+          <div className="flex flex-col rounded-xl border border-primary/15 bg-white px-6">
+            <div className="flex-1">
+              {rest.slice(0, 4).map(article => (
+                <ListRow key={article.id} article={article} tone="navy" />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function EuropeSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
@@ -947,6 +988,7 @@ export function HomePage() {
   const displayAviation = feed.avi;
   const displayHiddenHistories = feed.hh;
   const displayKurultai = feed.kur;
+  const displayNomadgames = feed.ng;
 
   return (
     <div>
@@ -964,6 +1006,8 @@ export function HomePage() {
       <OpinionSection articles={displayOpinion} />
       <CentralAsiaSection articles={displayCA} />
       <KurultaiSection articles={displayKurultai} />
+      <NomadgamesSection articles={displayNomadgames} />
+
       <EuropeSection articles={displayEurope} />
       <RussiaSection articles={displayRussia} />
 
