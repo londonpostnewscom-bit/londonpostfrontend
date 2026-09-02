@@ -37,6 +37,8 @@ const MORE_SECTIONS = [
   { value: 'editors-picks',     label: "Editor's Picks",       type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'in-focus',          label: 'In Focus',              type: 'section' as const, subCategories: [], isVideo: false },
  { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026', type: 'section' as const, subCategories: [], isVideo: false },
+  { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026', type: 'section' as const, subCategories: [], isVideo: false },
+
   { value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
 ];
 
