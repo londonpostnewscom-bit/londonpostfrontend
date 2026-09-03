@@ -191,6 +191,28 @@ export function sanitizeHtml(dirty: string): string {
       return newFigure;
     }
 
+    // Drop cap span — <span class="rte-dropcap">X</span>, inserted by the
+    // RichTextEditor's drop cap button. Without this explicit branch, a
+    // plain <span> falls into the generic "unrecognized inline wrapper"
+    // path a few lines below, which unwraps it and discards its class
+    // entirely (that path only preserves bold/italic/underline, not
+    // arbitrary custom classes) — so the drop cap would render correctly
+    // while typing, then silently revert to normal-sized text on the very
+    // next reload, the same bug class as the earlier image-alignment and
+    // caption issues.
+    if (tag === 'span') {
+      const cls = el.getAttribute('class');
+      if (cls && cls.trim() === 'rte-dropcap') {
+        const span = document.createElement('span');
+        span.setAttribute('class', 'rte-dropcap');
+        el.childNodes.forEach((child) => {
+          const cleaned = clean(child);
+          if (cleaned) span.appendChild(cleaned);
+        });
+        return span;
+      }
+    }
+
     // Process children first (needed for both branches below)
     const cleanedChildren: Node[] = [];
     el.childNodes.forEach((child) => {
