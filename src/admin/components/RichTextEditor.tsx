@@ -18,6 +18,7 @@ const TOOLS = [
   { cmd: 'unlink',              icon: '⛓️‍💥 Unlink', title: 'Remove link',                    isUnlink: true },
   { cmd: 'removeFormat',        icon: '✕ Clear',    title: 'Clear Formatting' },
   { cmd: 'image',               icon: '🖼️ Image',   title: 'Insert an image into the article body', isImage: true },
+  { cmd: 'dropcap',             icon: 'A<sub style="font-size:9px">a</sub>', title: 'Select a letter or word, then click this to make it a large drop cap (like a magazine intro)', isDropCap: true },
 ];
 
 const HEADING_TAGS = new Set(['H1', 'H2', 'H3', 'H4', 'H5', 'H6']);
@@ -368,6 +369,29 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     handleInput();
   };
 
+  // Wraps the selected letter/word in a styled span that floats left and
+  // renders large — the classic magazine "drop cap" treatment (see the
+  // reference image: a big first letter tall enough to sit alongside the
+  // first few lines of the paragraph, with the rest of the text wrapping
+  // around it). The actual size/float comes entirely from the
+  // `rte-dropcap` CSS class — see sanitize.ts (which preserves this class
+  // through save/reload) and index.css / RichTextEditor's own preview
+  // styles (which define what it looks like) for the other half of this.
+  const handleDropCap = () => {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !editorRef.current?.contains(sel.anchorNode)) {
+      window.alert('First select the letter or word you want to enlarge, then click this button.');
+      return;
+    }
+
+    const text = sel.toString();
+    document.execCommand('insertHTML', false, `<span class="rte-dropcap">${escapeHtml(text)}</span>`);
+
+    editorRef.current?.focus();
+    handleInput();
+  };
+
   const handleInput = () => {
     if (editorRef.current) {
       onChange(editorRef.current.innerHTML);
@@ -586,6 +610,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
               if ((t as any).isLink)   { handleLink();   return; }
               if ((t as any).isUnlink) { handleUnlink(); return; }
               if ((t as any).isImage)  { handleImageButtonClick(); return; }
+              if ((t as any).isDropCap) { handleDropCap(); return; }
               exec(t.cmd, (t as any).isBlock);
             }}
             className="min-w-[36px] rounded-md px-2 py-1 text-xs font-medium text-gray-600 transition hover:bg-white hover:text-gray-900 hover:shadow-sm disabled:opacity-50"
@@ -645,6 +670,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
             [&_figure_img]:block [&_figure_img]:w-full [&_figure_img]:rounded-lg [&_figure_img]:h-auto [&_figure_img]:cursor-pointer
             [&_figure_figcaption]:mt-1.5 [&_figure_figcaption]:block [&_figure_figcaption]:text-center [&_figure_figcaption]:text-xs [&_figure_figcaption]:italic [&_figure_figcaption]:text-gray-500 [&_figure_figcaption]:outline-none [&_figure_figcaption]:cursor-text
             [&_figure_figcaption]:empty:before:content-[attr(data-placeholder)] [&_figure_figcaption]:empty:before:text-gray-300
+            [&_.rte-dropcap]:float-left [&_.rte-dropcap]:mr-2 [&_.rte-dropcap]:mt-1 [&_.rte-dropcap]:text-8xl [&_.rte-dropcap]:font-black [&_.rte-dropcap]:leading-[0.8] [&_.rte-dropcap]:text-gray-900
             [&_.rte-embed-youtube]:my-3 [&_.rte-embed-youtube]:flex [&_.rte-embed-youtube]:h-28 [&_.rte-embed-youtube]:items-center [&_.rte-embed-youtube]:justify-center [&_.rte-embed-youtube]:rounded-lg [&_.rte-embed-youtube]:border [&_.rte-embed-youtube]:border-red-200 [&_.rte-embed-youtube]:bg-red-50 [&_.rte-embed-youtube]:text-xs [&_.rte-embed-youtube]:font-semibold [&_.rte-embed-youtube]:text-red-500 [&_.rte-embed-youtube]:before:content-['▶_YouTube_video_attached']
             [&_.rte-embed-vimeo]:my-3 [&_.rte-embed-vimeo]:flex [&_.rte-embed-vimeo]:h-28 [&_.rte-embed-vimeo]:items-center [&_.rte-embed-vimeo]:justify-center [&_.rte-embed-vimeo]:rounded-lg [&_.rte-embed-vimeo]:border [&_.rte-embed-vimeo]:border-blue-200 [&_.rte-embed-vimeo]:bg-blue-50 [&_.rte-embed-vimeo]:text-xs [&_.rte-embed-vimeo]:font-semibold [&_.rte-embed-vimeo]:text-blue-500 [&_.rte-embed-vimeo]:before:content-['▶_Vimeo_video_attached']
             empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
