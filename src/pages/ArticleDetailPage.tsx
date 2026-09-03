@@ -40,7 +40,7 @@ function decodeAndStrip(html: string) {
     // can't be used to smuggle in arbitrary styling or scripting hooks.
     .replace(/\s*class=["']([^"']*)["']/gi, (_match, cls) => {
       const allowed = new Set([
-        'rte-img-left', 'rte-img-right', 'rte-img-center', 'rte-caption',
+        'rte-img-left', 'rte-img-right', 'rte-img-center', 'rte-caption', 'rte-dropcap',
         'rte-embed-youtube', 'rte-embed-vimeo',
       ]);
       return allowed.has((cls || '').trim()) ? ` class="${cls.trim()}"` : '';
