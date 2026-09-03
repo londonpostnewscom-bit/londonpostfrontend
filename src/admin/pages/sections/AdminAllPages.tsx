@@ -1,6 +1,3 @@
-
-
-
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminApi } from '../../hooks/useAdminApi';
 import { RichTextEditor } from '../../components/RichTextEditor';
@@ -36,10 +33,9 @@ const MORE_SECTIONS = [
   { value: 'uk',                label: 'United Kingdom',       type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'editors-picks',     label: "Editor's Picks",       type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'in-focus',          label: 'In Focus',              type: 'section' as const, subCategories: [], isVideo: false },
- { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026', type: 'section' as const, subCategories: [], isVideo: false },
-  { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026', type: 'section' as const, subCategories: [], isVideo: false },
-
+   { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026', type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
+  { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026', type: 'section' as const, subCategories: [], isVideo: false },
 ];
 
 const ALL_SECTIONS = [...WORLD_REGIONS, ...MORE_SECTIONS];
@@ -571,62 +567,157 @@ function UnifiedForm({
   );
 }
 
-/* ─── Article Row ────────────────────────────────────────────────────── */
+/* ─── Article Row — now with a "Move" action alongside Edit/Delete.
+   Lets the admin relocate an already-published article to a different
+   section or region (e.g. "oops, this should've been Central Asia, not
+   Opinion") without re-creating it from scratch. Opens an inline panel
+   with the same section/region picker used at the top of the page; on
+   confirm, calls onMove with the chosen destination. The actual move
+   (copying the doc into the target collection and deleting it from the
+   source one, since regions and sections are separate MongoDB
+   collections) happens server-side — see handleMoveArticle in
+   AdminAllPages below. ─────────────────────────────────────────────── */
 
-function ArticleRow({ a, onEdit, onDelete }: { a: any; onEdit: () => void; onDelete: () => void }) {
+function MoveArticlePanel({
+  currentLabel, onConfirm, onCancel, moving,
+}: {
+  currentLabel: string;
+  onConfirm: (targetValue: string, targetSubCategory: string) => void;
+  onCancel: () => void;
+  moving: boolean;
+}) {
+  const [targetValue, setTargetValue] = useState('');
+  const targetCfg = ALL_SECTIONS.find(s => s.value === targetValue);
+  const targetSubCats = targetCfg?.subCategories || [];
+  const [targetSubCategory, setTargetSubCategory] = useState('');
+
+  return (
+    <div className="mt-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
+      <p className="mb-3 text-xs font-semibold text-indigo-900">
+        Move this article from <span className="capitalize">{currentLabel}</span> to:
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <select
+          value={targetValue}
+          onChange={e => { setTargetValue(e.target.value); setTargetSubCategory(''); }}
+          className="input w-full max-w-xs"
+        >
+          <option value="">— Choose destination —</option>
+          <optgroup label="🌍 Region">
+            {WORLD_REGIONS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
+          </optgroup>
+          <optgroup label="📂 More Sections">
+            {MORE_SECTIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </optgroup>
+        </select>
+
+        {targetSubCats.length > 0 && (
+          <select
+            value={targetSubCategory}
+            onChange={e => setTargetSubCategory(e.target.value)}
+            className="input w-full max-w-[200px]"
+          >
+            <option value="">— All of {targetCfg?.label} —</option>
+            {targetSubCats.map((sc: string) => <option key={sc} value={slugify(sc)}>{sc}</option>)}
+          </select>
+        )}
+
+        <button
+          onClick={() => targetValue && onConfirm(targetValue, targetSubCategory)}
+          disabled={!targetValue || moving}
+          className="rounded-lg bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
+        >
+          {moving ? 'Moving…' : 'Confirm Move'}
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={moving}
+          className="rounded-lg border border-gray-200 px-3 py-2 text-xs text-gray-600 hover:bg-white disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+      <p className="mt-2 text-[11px] text-indigo-700/70">
+        The article, its images, and its content blocks all move together — nothing needs to be re-uploaded.
+      </p>
+    </div>
+  );
+}
+
+function ArticleRow({ a, onEdit, onDelete, onMove, moving }: {
+  a: any; onEdit: () => void; onDelete: () => void;
+  onMove: (targetValue: string, targetSubCategory: string) => void;
+  moving: boolean;
+}) {
   const isVideo  = a.section === 'video';
   const ytThumb  = isVideo && a.videoId ? `https://img.youtube.com/vi/${a.videoId}/mqdefault.jpg` : null;
   const imgSrc   = a.imageUrl || ytThumb || '';
   const sLabel   = a.region || a.section || '';
   const crossPost: string[] = Array.isArray(a.crossPost) ? a.crossPost : [];
+  const [showMove, setShowMove] = useState(false);
 
   return (
-    <div className="flex items-center gap-4 rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-gray-300">
-      {imgSrc && (
-        <div className="relative h-14 w-20 flex-shrink-0">
-          <img src={imgSrc} className="h-full w-full rounded-xl object-cover" alt="" />
-          {isVideo && (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600/80">
-                <svg className="ml-0.5 h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 transition hover:border-gray-300">
+      <div className="flex items-center gap-4">
+        {imgSrc && (
+          <div className="relative h-14 w-20 flex-shrink-0">
+            <img src={imgSrc} className="h-full w-full rounded-xl object-cover" alt="" />
+            {isVideo && (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600/80">
+                  <svg className="ml-0.5 h-2.5 w-2.5 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+                </div>
               </div>
+            )}
+          </div>
+        )}
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-500 capitalize">{sLabel}</span>
+            {a.isFeatured  && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Featured</span>}
+            {a.isArchived  && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">Archived</span>}
+            {crossPost.map(v => (
+              <span key={v} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
+                🏠 {crossPostLabel(v)}
+              </span>
+            ))}
+            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${a.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+              {a.isActive ? 'Active' : 'Hidden'}
+            </span>
+          </div>
+
+          <p className="truncate text-sm font-semibold text-gray-800">{a.title}</p>
+          <p className="mt-0.5 text-xs text-gray-400">{a.category}{a.category && ' · '}{a.author}{a.author && ' · '}{a.date}</p>
+
+          {Array.isArray(a.hashtags) && a.hashtags.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {a.hashtags.slice(0,4).map((t: string) => (
+                <span key={t} className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">#{t}</span>
+              ))}
+              {a.hashtags.length > 4 && <span className="text-[11px] text-gray-400">+{a.hashtags.length-4} more</span>}
             </div>
           )}
         </div>
-      )}
 
-      <div className="min-w-0 flex-1">
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-bold text-gray-500 capitalize">{sLabel}</span>
-          {a.isFeatured  && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">Featured</span>}
-          {a.isArchived  && <span className="rounded-full bg-gray-200 px-2 py-0.5 text-xs text-gray-500">Archived</span>}
-          {crossPost.map(v => (
-            <span key={v} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700">
-              🏠 {crossPostLabel(v)}
-            </span>
-          ))}
-          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${a.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-            {a.isActive ? 'Active' : 'Hidden'}
-          </span>
+        <div className="flex flex-shrink-0 gap-2">
+          <button onClick={() => setShowMove(v => !v)}
+            className="rounded-lg border border-indigo-200 px-3 py-1.5 text-xs text-indigo-700 hover:bg-indigo-50">
+            {showMove ? 'Close' : 'Move'}
+          </button>
+          <button onClick={onEdit}   className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Edit</button>
+          <button onClick={onDelete} className="rounded-lg border border-red-100  px-3 py-1.5 text-xs text-red-600  hover:bg-red-50">Delete</button>
         </div>
-
-        <p className="truncate text-sm font-semibold text-gray-800">{a.title}</p>
-        <p className="mt-0.5 text-xs text-gray-400">{a.category}{a.category && ' · '}{a.author}{a.author && ' · '}{a.date}</p>
-
-        {Array.isArray(a.hashtags) && a.hashtags.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {a.hashtags.slice(0,4).map((t: string) => (
-              <span key={t} className="rounded-lg border border-gray-200 bg-gray-50 px-2 py-0.5 text-[11px] font-medium text-gray-600">#{t}</span>
-            ))}
-            {a.hashtags.length > 4 && <span className="text-[11px] text-gray-400">+{a.hashtags.length-4} more</span>}
-          </div>
-        )}
       </div>
 
-      <div className="flex flex-shrink-0 gap-2">
-        <button onClick={onEdit}   className="rounded-lg border border-gray-200 px-3 py-1.5 text-xs text-gray-600 hover:bg-gray-50">Edit</button>
-        <button onClick={onDelete} className="rounded-lg border border-red-100  px-3 py-1.5 text-xs text-red-600  hover:bg-red-50">Delete</button>
-      </div>
+      {showMove && (
+        <MoveArticlePanel
+          currentLabel={sLabel}
+          moving={moving}
+          onCancel={() => setShowMove(false)}
+          onConfirm={(targetValue, targetSubCategory) => onMove(targetValue, targetSubCategory)}
+        />
+      )}
     </div>
   );
 }
@@ -656,6 +747,7 @@ export function AdminAllPages() {
   const [editId,     setEditId]    = useState<string|null>(null);
   const [saving,     setSaving]    = useState(false);
   const [saveError,  setSaveError] = useState('');
+  const [movingId,   setMovingId]  = useState<string|null>(null);
 
   const load = useCallback(async () => {
     if (!selectedSection || !cfg) { setArticles([]); setTotalCount(0); setTotalPages(1); return; }
@@ -732,6 +824,33 @@ export function AdminAllPages() {
     if (!confirm('Delete this article permanently?')) return;
     try { await del(`${apiBase}/${id}`); await load(); }
     catch (e) { console.error(e); }
+  };
+
+  // Moves an already-saved article to a different section/region without
+  // the admin having to re-create it. Since regions and sections live in
+  // two separate MongoDB collections (RegionArticle vs SectionArticle),
+  // this can't be a simple field update when moving across that boundary
+  // — the backend endpoint (POST /all-articles/move) copies the full
+  // document — title, content, blocks, images, hashtags, everything —
+  // into the destination collection, then removes it from the source one.
+  const handleMoveArticle = async (article: any, targetValue: string, targetSubCategory: string) => {
+    if (!cfg) return;
+    setMovingId(article._id);
+    try {
+      const fd = new FormData();
+      fd.append('sourceType', cfg.type);
+      fd.append('sourceId', article._id);
+      const targetCfg = ALL_SECTIONS.find(s => s.value === targetValue);
+      fd.append('targetType', targetCfg?.type || '');
+      fd.append('targetValue', targetValue);
+      fd.append('targetSubCategory', targetSubCategory || '');
+      await post('/all-articles/move', fd);
+      await load();
+    } catch (e: any) {
+      alert(e.message || 'Failed to move this article. Please try again.');
+    } finally {
+      setMovingId(null);
+    }
   };
 
   const goToPage = (p: number) => {
@@ -855,6 +974,8 @@ export function AdminAllPages() {
                     a={a}
                     onEdit={() => { setEditId(a._id); setAdding(false); setSaveError(''); }}
                     onDelete={() => handleDelete(a._id)}
+                    onMove={(targetValue, targetSubCategory) => handleMoveArticle(a, targetValue, targetSubCategory)}
+                    moving={movingId === a._id}
                   />
                 )
               )}
