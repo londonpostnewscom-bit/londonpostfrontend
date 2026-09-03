@@ -134,4 +134,15 @@ body {
   .prose-article figure figcaption:empty {
     display: none;
   }
+
+  /* Drop cap — a large, floated first letter/word, magazine-intro style.
+     Applied via the RichTextEditor's drop cap button to a <span
+     class="rte-dropcap">. Sized to roughly span 3 lines of body text at
+     the default text-base/leading-relaxed used elsewhere in
+     .prose-article, matching the reference layout where the enlarged
+     letter sits beside the first few lines and the rest of the paragraph
+     wraps around it normally. */
+  .prose-article .rte-dropcap {
+    @apply float-left mr-2 mt-1 text-7xl font-black leading-[0.78] text-slate-900;
+  }
 }
