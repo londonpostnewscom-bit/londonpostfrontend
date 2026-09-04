@@ -18,7 +18,7 @@ export function Footer() {
           />
 
           <p className="mx-auto mt-6 max-w-[420px] text-sm leading-8 text-slate-900/80 sm:text-base lg:mx-0">
-            EM Insights is a modern editorial platform focused on analysis,
+            London Post is a modern editorial platform focused on analysis,
             diplomacy, strategic communication, media research and region-based reporting.
           </p>
 
