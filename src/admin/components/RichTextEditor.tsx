@@ -377,6 +377,17 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   // `rte-dropcap` CSS class — see sanitize.ts (which preserves this class
   // through save/reload) and index.css / RichTextEditor's own preview
   // styles (which define what it looks like) for the other half of this.
+  //
+  // Uses the Range API directly (extractContents + insertNode) instead of
+  // document.execCommand('insertHTML'). execCommand's insertion logic
+  // "normalizes" the surrounding markup in ways that can fracture the
+  // enclosing <p> into two separate paragraphs right at the insertion
+  // point — which is exactly what caused the bug where only the first
+  // line wrapped around the drop cap and everything after it dropped to
+  // a fresh, full-width paragraph below, instead of continuing to wrap
+  // for the rest of that same paragraph's text. Manipulating the Range
+  // directly replaces only the exact selected text with the span and
+  // leaves the surrounding paragraph completely untouched.
   const handleDropCap = () => {
     restoreSelection();
     const sel = window.getSelection();
@@ -385,9 +396,21 @@ export function RichTextEditor({ value, onChange, placeholder }: {
       return;
     }
 
-    const text = sel.toString();
-    document.execCommand('insertHTML', false, `<span class="rte-dropcap">${escapeHtml(text)}</span>`);
+    const range = sel.getRangeAt(0);
+    const span = document.createElement('span');
+    span.className = 'rte-dropcap';
 
+    try {
+      const contents = range.extractContents();
+      span.appendChild(contents);
+      range.insertNode(span);
+    } catch {
+      // Extremely unlikely fallback for a selection shape the Range API
+      // can't cleanly extract — keeps the feature working either way.
+      document.execCommand('insertHTML', false, `<span class="rte-dropcap">${escapeHtml(sel.toString())}</span>`);
+    }
+
+    sel.removeAllRanges();
     editorRef.current?.focus();
     handleInput();
   };
