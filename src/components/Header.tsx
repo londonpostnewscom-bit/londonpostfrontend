@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { navigation, regionMenus } from '../data/siteData';
 import { CloseIcon, MenuIcon } from './Icons';
 import { SearchBox } from './SearchBox';
-import logo1 from '../assets/emlogo.png';
+import logo1 from '../assets/londonpost.png';
 import { SocialLinks } from './SocialLinks';
 import { DropdownPanel } from './DropdownPanel';
 
