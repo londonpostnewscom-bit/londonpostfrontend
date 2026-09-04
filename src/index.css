@@ -143,6 +143,6 @@ body {
      letter sits beside the first few lines and the rest of the paragraph
      wraps around it normally. */
   .prose-article .rte-dropcap {
-    @apply float-left mr-2 mt-1 text-7xl font-black leading-[0.78] text-slate-900;
+    @apply float-left mr-2 mt-1 text-8xl font-black leading-[0.8] text-slate-900;
   }
 }
