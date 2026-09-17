@@ -36,6 +36,8 @@ const MORE_SECTIONS = [
    { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026', type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026', type: 'section' as const, subCategories: [], isVideo: false },
+      { value: 'the-nuclear-question',    label: 'The Nuclear Question',       type: 'section' as const, subCategories: [], isVideo: false },
+
 ];
 
 const ALL_SECTIONS = [...WORLD_REGIONS, ...MORE_SECTIONS];
