@@ -1,3 +1,4 @@
+
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cld } from '../utils/Cloudinary';
@@ -51,10 +52,6 @@ function mapArticle(a: any): HeroSlide {
   };
 }
 
-// De-duplicates by id (falling back to a normalized title match when an id
-// is ever missing/blank) while preserving the incoming sort order. This is
-// what stops the same article from landing in two hero slots when it shows
-// up in both the region-articles and section-articles "world" responses.
 function dedupeSlides(slides: HeroSlide[]): HeroSlide[] {
   const seen = new Set<string>();
   const out: HeroSlide[] = [];
@@ -67,21 +64,20 @@ function dedupeSlides(slides: HeroSlide[]): HeroSlide[] {
   return out;
 }
 
-/* World hero = the 5 latest articles cross-posted to "world" from BOTH
-   RegionArticle and SectionArticle, always freshest-first, de-duplicated
-   so the same article can never occupy more than one slide. */
+// FIXED: this previously fired TWO separate requests —
+// /region-articles/home-section/world AND /section-articles/home/world —
+// but both routes call the exact same getHomeFeed('world', 20) helper
+// server-side, which already merges RegionArticle + SectionArticle
+// results internally. The two calls returned byte-for-byte identical
+// ~2.9MB payloads; this was paying for that same expensive merge-and-sort
+// twice for zero benefit. Only used now when Hero is rendered WITHOUT a
+// worldArticles prop (i.e. standalone, outside HomePage's bundle fetch).
 async function fetchWorldHeroes(): Promise<HeroSlide[]> {
   try {
-    const [rr, sr] = await Promise.all([
-      fetch(`${API_URL}/region-articles/home-section/world?limit=20`),
-      fetch(`${API_URL}/section-articles/home/world?limit=20`),
-    ]);
-    const regionData: any[] = rr.ok ? await rr.json() : [];
-    const sectionData: any[] = sr.ok ? await sr.json() : [];
+    const r = await fetch(`${API_URL}/section-articles/home/world?limit=20`);
+    const data: any[] = r.ok ? await r.json() : [];
     return dedupeSlides(
-      [...regionData, ...sectionData]
-        .map(mapArticle)
-        .sort((a, b) => b._sortDate - a._sortDate)
+      data.map(mapArticle).sort((a, b) => b._sortDate - a._sortDate)
     ).slice(0, 5);
   } catch { return []; }
 }
@@ -102,16 +98,31 @@ async function fetchManualHeroes(): Promise<HeroSlide[]> {
   } catch { return []; }
 }
 
-export function Hero() {
+// `worldArticles`: when provided (HomePage now passes this straight from
+// its own single /api/home-feed bundle fetch), Hero skips its own network
+// call entirely — it just maps/sorts/dedupes the already-fetched raw
+// docs. When omitted (Hero used standalone anywhere else), it falls back
+// to fetching the data itself via the de-duplicated single call above.
+export function Hero({ worldArticles }: { worldArticles?: any[] } = {}) {
   const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [current, setCurrent] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([fetchWorldHeroes(), fetchManualHeroes()]).then(([world, manual]) => {
+    const worldPromise: Promise<HeroSlide[]> = worldArticles
+      ? Promise.resolve(
+          dedupeSlides(worldArticles.map(mapArticle).sort((a, b) => b._sortDate - a._sortDate)).slice(0, 5)
+        )
+      : fetchWorldHeroes();
+
+    Promise.all([worldPromise, fetchManualHeroes()]).then(([world, manual]) => {
       setSlides(world.length ? world : manual);
       setLoading(false);
     });
+    // Intentionally runs once — HomePage only ever mounts Hero after its
+    // own bundle fetch has already resolved, so worldArticles is stable
+    // from the very first render in that usage.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -120,7 +131,6 @@ export function Hero() {
     return () => clearInterval(t);
   }, [slides.length]);
 
-  // Shorter skeleton height to match the new compact hero.
   if (loading) return <div className="h-[320px] animate-pulse bg-slate-900" />;
   if (!slides.length) return null;
   const slide = slides[current];
@@ -131,9 +141,6 @@ export function Hero() {
         <div className="absolute -left-40 top-0 h-72 w-72 rounded-full bg-blue-900/30 blur-[100px]" />
         <div className="absolute -right-40 bottom-0 h-72 w-72 rounded-full bg-indigo-900/20 blur-[100px]" />
       </div>
-      {/* Reduced vertical padding (py-8/py-10 vs the old py-12/py-16) —
-          this alone is most of what makes the section shorter, since the
-          grid height otherwise just follows its tallest child. */}
       <div className="relative mx-auto max-w-7xl px-4 py-8 lg:px-6 lg:py-10">
         <div className="grid items-center gap-6 lg:grid-cols-2 lg:gap-10">
           <div className="order-2 lg:order-1">
@@ -142,8 +149,6 @@ export function Hero() {
                 {slide.badgeText}
               </span>
             )}
-            {/* Headline dropped from text-3xl/2.6rem to text-xl/2rem — reads
-                as a news headline, not a hero/landing-page statement. */}
             <h1 className="text-xl font-black leading-snug text-white lg:text-[2rem] lg:leading-[1.2]">
               {slide.title}
             </h1>
@@ -171,9 +176,6 @@ export function Hero() {
                   />
                 </div>
               ) : slide.mediaUrl ? (
-                // Cloudinary-optimized. Height capped noticeably lower than
-                // before (was 440/260) so the image reads as an article
-                // thumbnail-scale photo, not a full hero banner.
                 <img
                   src={cld(slide.mediaUrl, 800)}
                   alt={slide.title}
