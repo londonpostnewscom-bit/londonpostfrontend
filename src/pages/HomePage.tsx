@@ -1,5 +1,3 @@
-
-
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -49,8 +47,10 @@ type HomeFeedData = {
   uk: Article[]; ep: Article[]; inf: Article[]; intv: Article[];
   vid: any[]; op: Article[]; ca: Article[]; eu: Article[]; ru: Article[];
   dc: Article[]; tash: Article[]; cauc: CaucasusFeed; avi: Article[]; hh: Article[]; kur: Article[]; ng: Article[]; nc: Article[];
+  world: any[];
 };
 let homeFeedCache: HomeFeedData | null = null;
+let homeFeedInFlight: Promise<HomeFeedData> | null = null;
 
 function toArticle(a: any): Article {
   return {
@@ -71,68 +71,59 @@ function toArticle(a: any): Article {
   } as Article;
 }
 
-const MONTHS: Record<string, number> = {
-  january:0, february:1, march:2, april:3, may:4, june:5,
-  july:6, august:7, september:8, october:9, november:10, december:11,
-};
-function parseDate(input: string): number {
-  if (!input) return 0;
-  const s = input.trim();
-  const native = new Date(s);
-  if (!isNaN(native.getTime()) && /\d{4}/.test(s)) return native.getTime();
-  const lower = s.toLowerCase();
-  let m = lower.match(/([a-z]+)\D{0,3}(\d{1,2})\D{0,3}(\d{4})/);
-  if (m && MONTHS[m[1]] !== undefined) return new Date(+m[3], MONTHS[m[1]], +m[2]).getTime();
-  m = lower.match(/(\d{1,2})\D{0,3}([a-z]+)\D{0,3}(\d{4})/);
-  if (m && MONTHS[m[2]] !== undefined) return new Date(+m[3], MONTHS[m[2]], +m[1]).getTime();
-  return 0;
-}
-
-async function fetchSectionHome(section: string, limit = 4): Promise<any[]> {
+async function fetchHomeBundle(): Promise<any | null> {
   try {
-    const r = await fetch(`${API_URL}/section-articles/home/${section}?limit=${limit}`);
-    if (!r.ok) return [];
-    const data = await r.json();
-    return section === 'video' ? data : data.map(toArticle);
-  } catch { return []; }
-}
-
-async function fetchRegionSubcategory(area: string, subCategory: string, limit = 4): Promise<Article[]> {
-  try {
-    const r = await fetch(`${API_URL}/region-articles/region/${area}?subCategory=${subCategory}`);
-    if (!r.ok) return [];
-    const data = await r.json();
-    return data
-      .map(toArticle)
-      .sort((a: Article, b: Article) => parseDate(b.date) - parseDate(a.date))
-      .slice(0, limit);
-  } catch { return []; }
+    const r = await fetch(`${API_URL}/home-feed`);
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
 }
 
 async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
-  const [uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, armenia, georgia, azerbaijan, avi, hh, kur, ng, nc] = await Promise.all([
-    fetchSectionHome('uk', 4),
-    fetchSectionHome('editors-picks', 4),
-    fetchSectionHome('in-focus', 4),
-    fetchSectionHome('interviews'),
-    fetchSectionHome('video', 4),
-    fetchSectionHome('opinion'),
-    fetchSectionHome('central-asia', 8),
-    fetchSectionHome('europe-home', 4),
-    fetchSectionHome('russia-home', 5),
-    fetchSectionHome('diplomatic-corner', 8),
-    fetchSectionHome('tashkent', 5),
-    fetchRegionSubcategory('caucasus', 'armenia', 4),
-    fetchRegionSubcategory('caucasus', 'georgia', 4),
-    fetchRegionSubcategory('caucasus', 'azerbaijan', 4),
-    fetchSectionHome('aviation', 5),
-    fetchSectionHome('hidden-histories', 8),
-    fetchSectionHome('kazakhstan-kurultai-elections-2026', 5),
-   fetchSectionHome('world-nomad-games-2026', 5),
-   fetchSectionHome('the-nuclear-question', 5),
+  if (homeFeedCache) return homeFeedCache;
+  if (homeFeedInFlight) return homeFeedInFlight;
 
-  ]);
-  return { uk, ep, inf, intv, vid, op, ca, eu, ru, dc, tash, cauc: { armenia, georgia, azerbaijan }, avi, hh, kur , ng , nc };
+  homeFeedInFlight = (async () => {
+    const bundle = await fetchHomeBundle();
+    const sections  = bundle?.sections  || {};
+    const regions   = bundle?.regions   || {};
+    const caucasusR = bundle?.caucasus  || {};
+    const buckets   = bundle?.buckets   || {};
+
+    const mapSec = (key: string) => (sections[key] || []).map(toArticle);
+    const mapReg = (key: string) => (regions[key] || []).map(toArticle);
+
+    const result: HomeFeedData = {
+      uk:   mapSec('uk'),
+      ep:   (buckets['editors-picks'] || []).map(toArticle),
+      inf:  (buckets['in-focus'] || []).map(toArticle),
+      intv: mapSec('interviews'),
+      vid:  sections['video'] || [],
+      op:   mapSec('opinion'),
+      ca:   mapReg('central-asia'),
+      eu:   mapReg('europe-home'),
+      ru:   mapReg('russia-home'),
+      dc:   mapSec('geopolitical-dispatch'),
+      tash: mapSec('tashkent'),
+      cauc: {
+        armenia:    (caucasusR.armenia || []).map(toArticle),
+        georgia:    (caucasusR.georgia || []).map(toArticle),
+        azerbaijan: (caucasusR.azerbaijan || []).map(toArticle),
+      },
+      avi: mapSec('aviation'),
+      hh:  mapSec('hidden-histories'),
+      kur: mapSec('kazakhstan-kurultai-elections-2026'),
+      ng:  mapSec('world-nomad-games-2026'),
+      nc:  mapSec('the-nuclear-question'),
+      world: buckets['world'] || [],
+    };
+
+    homeFeedCache = result;
+    homeFeedInFlight = null;
+    return result;
+  })();
+
+  return homeFeedInFlight;
 }
 
 function getYtThumb(videoId: string) {
@@ -524,10 +515,6 @@ function VideoSection({ videos }: { videos: any[] }) {
   );
 }
 
-
-
-
-
 function OpinionSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
@@ -581,15 +568,6 @@ function CentralAsiaSection({ articles }: { articles: Article[] }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   SECTION — Kazakhstan "Kurultai" Elections 2026
-   Concept: "Election Watch" — a formal, official-feeling briefing (navy,
-   the same tone used for UK/Europe's structural sections) rather than
-   the carousel/dispatch treatment right above it, so a reader can tell
-   at a glance this is a distinct, event-specific desk and not just more
-   Central Asia coverage. The lead card carries a ballot-badge instead
-   of Central Asia's "Dispatch" tag or In Focus's "Dossier" stamp.
-   ═══════════════════════════════════════════════════════════════════ */
 function KurultaiSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
@@ -631,8 +609,6 @@ function KurultaiSection({ articles }: { articles: Article[] }) {
   );
 }
 
-
-
 function NomadgamesSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   const [lead, ...rest] = articles;
@@ -649,7 +625,7 @@ function NomadgamesSection({ articles }: { articles: Article[] }) {
                 : <div className="h-full w-full bg-slate-100" />}
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-           
+
             <div className="absolute inset-x-0 bottom-0 p-6 lg:p-8">
               <CategoryTag category={lead.category} dark tone="navy" />
               <h3 className="mt-2 text-2xl font-bold leading-tight text-white lg:text-3xl">{lead.title}</h3>
@@ -686,7 +662,7 @@ function TheNuclearQuestion({ articles }: { articles: Article[] }) {
                 : <div className="h-full w-full bg-slate-100" />}
             </div>
             <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent" />
-          
+
             <div className="absolute inset-x-0 bottom-0 p-6 lg:p-8">
               <CategoryTag category={lead.category} dark tone="navy" />
               <h3 className="mt-2 text-2xl font-bold leading-tight text-white lg:text-3xl">{lead.title}</h3>
@@ -695,7 +671,7 @@ function TheNuclearQuestion({ articles }: { articles: Article[] }) {
             </div>
           </Link>
           <div className="flex flex-col rounded-xl border border-primary/15 bg-white px-6">
-            <p className="border-b border-slate-200 pb-3 pt-5 text-[11px] font-black uppercase tracking-[0.14em] text-primary/60">More Election Coverage</p>
+            <p className="border-b border-slate-200 pb-3 pt-5 text-[11px] font-black uppercase tracking-[0.14em] text-primary/60">More Nuclear Coverage</p>
             <div className="flex-1">
               {rest.slice(0, 4).map(article => (
                 <ListRow key={article.id} article={article} tone="navy" />
@@ -707,7 +683,6 @@ function TheNuclearQuestion({ articles }: { articles: Article[] }) {
     </section>
   );
 }
-
 
 function EuropeSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
@@ -916,7 +891,6 @@ function AviationSection({ articles }: { articles: Article[] }) {
   );
 }
 
-
 function HiddenHistoriesSection({ articles }: { articles: Article[] }) {
   if (!articles.length) return null;
   return (
@@ -938,7 +912,6 @@ function HiddenHistoriesSection({ articles }: { articles: Article[] }) {
                   />
                 : <div className="h-full w-full bg-slate-100" />}
               <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/0 to-transparent" />
-             
             </div>
             <div className="p-5">
               <CategoryTag category={article.category} tone="gold" />
@@ -989,21 +962,24 @@ export function HomePage() {
   const [homeLoaded, setHomeLoaded] = useState(homeFeedCache !== null);
 
   useEffect(() => {
+    if (homeFeedCache) {
+      setFeed(homeFeedCache);
+      setHomeLoaded(true);
+      return;
+    }
     let cancelled = false;
     fetchAllHomeFeeds().then((data) => {
       if (cancelled) return;
-      homeFeedCache = data;
       setFeed(data);
       setHomeLoaded(true);
     });
     return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   if (!homeLoaded || !feed) {
     return (
       <div>
-        <Hero />
+        <div className="h-[320px] animate-pulse bg-slate-900" />
         <HomeSkeleton />
       </div>
     );
@@ -1011,10 +987,6 @@ export function HomePage() {
 
   const displayUK       = feed.uk.length      ? feed.uk      : staticUK;
   const displayEdPick   = feed.ep.length      ? feed.ep      : staticEdPick;
-  // In Focus intentionally has NO static/demo fallback — this section
-  // should stay hidden (InFocusSection already returns null on an empty
-  // array) until the admin publishes a real In Focus article, rather
-  // than silently showing placeholder content that looks like real news.
   const displayInFocus  = feed.inf;
   const displayIntvw    = feed.intv.length    ? feed.intv    : staticIntvw;
   const displayVideos   = feed.vid;
@@ -1033,7 +1005,7 @@ export function HomePage() {
 
   return (
     <div>
-      <Hero />
+      <Hero worldArticles={feed.world} />
 
       <section className="mx-auto max-w-7xl px-4 py-10 lg:px-6">
         <AdBanner identifier="homepage-banner-1" />
@@ -1056,7 +1028,6 @@ export function HomePage() {
       <CaucasusSection armenia={displayCaucasus.armenia} georgia={displayCaucasus.georgia} azerbaijan={displayCaucasus.azerbaijan} />
       <AviationSection articles={displayAviation} />
       <HiddenHistoriesSection articles={displayHiddenHistories} />
-
 
       <DiplomaticCornerSection articles={displayDiplo} />
 
