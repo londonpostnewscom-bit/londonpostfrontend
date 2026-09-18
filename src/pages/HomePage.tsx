@@ -6,7 +6,7 @@ import { Article, articles as staticArticles } from '../data/siteData';
 import { PartnersMarquee } from '../components/PartnersMarquee';
 import { cld } from '../utils/Cloudinary';
 import { AuthorAvatar } from '../components/AuthorAvatar';
-type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure';
+type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure'; 
 
 const TONE: Record<Tone, {
   text: string; textFaint: string; bg: string; tick: string;
