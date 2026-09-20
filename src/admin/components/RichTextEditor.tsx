@@ -128,15 +128,6 @@ function extractLines(root: Node): Line[] {
     if (tag === 'BR') { current.push('<br>'); return; }
 
     if (tag === 'FIGURE') {
-      // A pasted <figure><img/><figcaption>...</figcaption></figure> (very
-      // common when copying an article from another site — exactly what
-      // produced the plain italic paragraph under the image before this
-      // fix) is now converted into the SAME figure+figcaption markup our
-      // own image tool produces, instead of falling through to the
-      // generic block-tag path (which flattened the caption into its own
-      // separate <p><i>...</i></p>, disconnected from the image). This
-      // makes a pasted caption editable and styled identically to one
-      // typed fresh in the editor.
       const imgEl = el.querySelector('img');
       if (imgEl) {
         const rawSrc = resolveImgSrc(imgEl);
@@ -294,17 +285,17 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingReplace, setUploadingReplace] = useState(false);
 
-  // Click-to-select image toolbar (Align / Replace / Remove) — mirrors the
-  // pattern from the simpler editor, wired into the same Cloudinary upload
-  // endpoint the toolbar's "Image" button already uses. The Align buttons
-  // are the fix: inserted/pasted images always landed as rte-img-center
-  // (full width) with no way to switch to the smaller floated
-  // rte-img-left/rte-img-right treatment — those classes already existed
-  // and were already allowlisted all the way through to the live article
-  // page, there just wasn't a UI control to actually apply them.
   const activeImgRef = useRef<HTMLImageElement | null>(null);
   const activeFigureRef = useRef<HTMLElement | null>(null);
   const [imgToolbarPos, setImgToolbarPos] = useState<{ top: number; left: number } | null>(null);
+
+  // NEW: floating selection toolbar — appears directly above whatever
+  // text is currently highlighted, anywhere in the article body. This is
+  // what fixes "I have to scroll back up to the top toolbar every time I
+  // want to bold something in a long article" — Bold/Italic/Underline/
+  // Link are now available right where the selection is, the same way
+  // Medium/Notion/Google Docs do it.
+  const [selToolbarPos, setSelToolbarPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML && value) {
@@ -325,6 +316,35 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     const sel = window.getSelection();
     sel?.removeAllRanges();
     sel?.addRange(range);
+  };
+
+  // Recomputes (or hides) the floating selection toolbar based on the
+  // browser's current text selection. Positioned relative to the same
+  // wrapping element the image toolbar already uses, via the selection
+  // range's own bounding box — so it always sits right above whatever
+  // was just highlighted, regardless of how far down the article that is.
+  const updateSelectionToolbar = () => {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !editorRef.current) {
+      setSelToolbarPos(null);
+      return;
+    }
+    const anchorNode = sel.anchorNode;
+    if (!anchorNode || !editorRef.current.contains(anchorNode)) {
+      setSelToolbarPos(null);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (rect.width === 0 && rect.height === 0) {
+      setSelToolbarPos(null);
+      return;
+    }
+    const parentRect = editorRef.current.getBoundingClientRect();
+    setSelToolbarPos({
+      top: rect.top - parentRect.top - 42,
+      left: rect.left - parentRect.left + rect.width / 2,
+    });
   };
 
   const exec = (cmd: string, isBlock = false) => {
@@ -360,6 +380,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
 
     editorRef.current?.focus();
     handleInput();
+    setSelToolbarPos(null);
   };
 
   const handleUnlink = () => {
@@ -369,25 +390,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     handleInput();
   };
 
-  // Wraps the selected letter/word in a styled span that floats left and
-  // renders large — the classic magazine "drop cap" treatment (see the
-  // reference image: a big first letter tall enough to sit alongside the
-  // first few lines of the paragraph, with the rest of the text wrapping
-  // around it). The actual size/float comes entirely from the
-  // `rte-dropcap` CSS class — see sanitize.ts (which preserves this class
-  // through save/reload) and index.css / RichTextEditor's own preview
-  // styles (which define what it looks like) for the other half of this.
-  //
-  // Uses the Range API directly (extractContents + insertNode) instead of
-  // document.execCommand('insertHTML'). execCommand's insertion logic
-  // "normalizes" the surrounding markup in ways that can fracture the
-  // enclosing <p> into two separate paragraphs right at the insertion
-  // point — which is exactly what caused the bug where only the first
-  // line wrapped around the drop cap and everything after it dropped to
-  // a fresh, full-width paragraph below, instead of continuing to wrap
-  // for the rest of that same paragraph's text. Manipulating the Range
-  // directly replaces only the exact selected text with the span and
-  // leaves the surrounding paragraph completely untouched.
   const handleDropCap = () => {
     restoreSelection();
     const sel = window.getSelection();
@@ -405,8 +407,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
       span.appendChild(contents);
       range.insertNode(span);
     } catch {
-      // Extremely unlikely fallback for a selection shape the Range API
-      // can't cleanly extract — keeps the feature working either way.
       document.execCommand('insertHTML', false, `<span class="rte-dropcap">${escapeHtml(sel.toString())}</span>`);
     }
 
@@ -469,11 +469,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
         `<figure class="rte-img-center" contenteditable="false"><img src="${escapeHtml(url)}" alt="${alt}" class="rte-img-inner" /><figcaption class="rte-caption" contenteditable="true" data-placeholder="Add a caption (optional)"></figcaption></figure><p><br></p>`
       );
 
-      // Auto-focus the caption right away so typing one is a single
-      // continuous action after picking the file — not a separate click.
-      // The trailing empty paragraph above guarantees there's always
-      // somewhere to land afterward (see handleEditorKeyDown below for
-      // the Enter-to-escape-the-caption behavior).
       setTimeout(() => {
         const captions = editorRef.current?.querySelectorAll('figcaption.rte-caption');
         const last = captions && (captions[captions.length - 1] as HTMLElement | undefined);
@@ -488,12 +483,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
   };
 
-  // Clicking any image (bare, or the new figure+caption wrapper) selects
-  // it and shows a small floating Align / Replace / Remove toolbar right
-  // above it. For a figure-wrapped image, the toolbar targets the whole
-  // figure (so alignment floats image+caption together as one unit) while
-  // Replace still updates the inner <img>'s src directly. Clicking
-  // anywhere else (including a different image) closes/moves it.
   const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
     const figure = target.closest('figure') as HTMLElement | null;
@@ -508,8 +497,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     }
 
     if (target.tagName === 'IMG') {
-      // Legacy bare <img> with no figure wrapper (from before captions
-      // existed, or from pasted content) — same toolbar, just no caption.
       const rect = target.getBoundingClientRect();
       const parentRect = editorRef.current!.getBoundingClientRect();
       activeFigureRef.current = null;
@@ -570,13 +557,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     handleInput();
   };
 
-  // Pressing Enter while typing a caption jumps out to the paragraph
-  // right after the image, instead of trying (and failing, since a
-  // figcaption is a single line) to insert a line break inside it. This
-  // is the same "Enter escapes the block" pattern used by Notion/
-  // WordPress's block editor, and it's what actually fixes "I can't get
-  // out of the caption box" — previously there was no way to leave a
-  // caption via the keyboard at all once focus landed inside it.
   const handleEditorKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     const active = document.activeElement as HTMLElement | null;
     if (!active || !active.classList.contains('rte-caption') || e.key !== 'Enter') return;
@@ -586,9 +566,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     let target = figure?.nextElementSibling as HTMLElement | null;
 
     if (!target) {
-      // Shouldn't normally happen (a trailing paragraph is always
-      // inserted alongside a new image), but if the image sits at the
-      // very end of older content with nothing after it, create one.
       target = document.createElement('p');
       target.innerHTML = '<br>';
       figure?.parentNode?.insertBefore(target, figure.nextSibling);
@@ -664,12 +641,13 @@ export function RichTextEditor({ value, onChange, placeholder }: {
           contentEditable
           suppressContentEditableWarning
           onInput={handleInput}
-          onBlur={() => { handleInput(); saveSelection(); }}
-          onMouseUp={saveSelection}
-          onKeyUp={saveSelection}
+          onBlur={() => { handleInput(); saveSelection(); setSelToolbarPos(null); }}
+          onMouseUp={() => { saveSelection(); updateSelectionToolbar(); }}
+          onKeyUp={() => { saveSelection(); updateSelectionToolbar(); }}
           onKeyDown={handleEditorKeyDown}
           onPaste={handlePaste}
           onClick={handleEditorClick}
+          onScroll={() => setSelToolbarPos(null)}
           data-placeholder={placeholder || 'Write or paste article content here...'}
           style={{ resize: 'vertical', overflow: 'auto', minHeight: '220px' }}
           className="block w-full px-4 py-3 text-sm text-gray-800 outline-none
@@ -698,6 +676,51 @@ export function RichTextEditor({ value, onChange, placeholder }: {
             [&_.rte-embed-vimeo]:my-3 [&_.rte-embed-vimeo]:flex [&_.rte-embed-vimeo]:h-28 [&_.rte-embed-vimeo]:items-center [&_.rte-embed-vimeo]:justify-center [&_.rte-embed-vimeo]:rounded-lg [&_.rte-embed-vimeo]:border [&_.rte-embed-vimeo]:border-blue-200 [&_.rte-embed-vimeo]:bg-blue-50 [&_.rte-embed-vimeo]:text-xs [&_.rte-embed-vimeo]:font-semibold [&_.rte-embed-vimeo]:text-blue-500 [&_.rte-embed-vimeo]:before:content-['▶_Vimeo_video_attached']
             empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
         />
+
+        {/* Floating selection toolbar — Bold / Italic / Underline / Link,
+            positioned right above whatever text is currently highlighted.
+            Every button preventDefault()s its own mousedown, exactly like
+            the fixed toolbar above, so clicking it never steals focus
+            away from the contentEditable — the selection stays exactly
+            where it was, meaning the format command applies to the right
+            text and the toolbar can stay open for a second/third action
+            (e.g. Bold, then Underline) on the same highlighted text. */}
+        {selToolbarPos && (
+          <div
+            className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-gray-900 px-1.5 py-1 shadow-lg"
+            style={{ top: selToolbarPos.top, left: selToolbarPos.left }}
+          >
+            <button
+              title="Bold"
+              onMouseDown={(e) => { e.preventDefault(); exec('bold'); }}
+              className="rounded px-2 py-1 text-xs font-bold text-white hover:bg-white/15"
+            >
+              B
+            </button>
+            <button
+              title="Italic"
+              onMouseDown={(e) => { e.preventDefault(); exec('italic'); }}
+              className="rounded px-2 py-1 text-xs italic text-white hover:bg-white/15"
+            >
+              I
+            </button>
+            <button
+              title="Underline"
+              onMouseDown={(e) => { e.preventDefault(); exec('underline'); }}
+              className="rounded px-2 py-1 text-xs text-white underline hover:bg-white/15"
+            >
+              U
+            </button>
+            <span className="mx-0.5 h-4 w-px bg-white/20" />
+            <button
+              title="Turn selected text into a link"
+              onMouseDown={(e) => { e.preventDefault(); saveSelection(); handleLink(); }}
+              className="rounded px-2 py-1 text-xs text-white hover:bg-white/15"
+            >
+              🔗
+            </button>
+          </div>
+        )}
 
         {imgToolbarPos && (
           <div
