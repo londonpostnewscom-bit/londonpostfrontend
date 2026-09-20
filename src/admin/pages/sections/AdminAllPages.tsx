@@ -1,8 +1,10 @@
+
+
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAdminApi } from '../../hooks/useAdminApi';
 import { RichTextEditor } from '../../components/RichTextEditor';
 import { BlockEditor, Block, serializeBlocks, deserializeBlocks } from '../../components/BlockEditor';
-
+import { parseArticleDate } from '../../../utils/articleBuckets';
 /* ─── Section config ─────────────────────────────────────────────────── */
 
 const WORLD_REGIONS = [
@@ -36,7 +38,7 @@ const MORE_SECTIONS = [
    { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026', type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'aviation', label: 'Aviation', type: 'section' as const, subCategories: [], isVideo: false },
   { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026', type: 'section' as const, subCategories: [], isVideo: false },
-      { value: 'the-nuclear-question',    label: 'The Nuclear Question',       type: 'section' as const, subCategories: [], isVideo: false },
+    { value: 'the-nuclear-question',    label: 'The Nuclear Question',       type: 'section' as const, subCategories: [], isVideo: false },
 
 ];
 
@@ -83,6 +85,50 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
       className={`relative inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition ${value?'bg-red-600':'bg-gray-300'}`}>
       <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition ${value?'translate-x-4':'translate-x-0.5'}`} />
     </button>
+  );
+}
+
+/* ─── Live classification preview ────────────────────────────────────
+   Shows the admin exactly which public bucket this article will land
+   in, computed the same way bucketArticles.ts computes it for readers —
+   so nobody has to guess or manually flag "featured" anymore. This is
+   read-only: it reflects the date field, it doesn't set anything. */
+function classifyArticle(date: string, manuallyArchived: boolean) {
+  if (manuallyArchived) return { label: 'Archived', tone: 'gray', note: 'Manually archived — hidden from Latest/Featured regardless of date.' };
+
+  const parsed = parseArticleDate(date);
+  if (!parsed) return { label: 'Featured', tone: 'amber', note: 'No valid date yet — shows in Featured until a date is set.' };
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const year = parsed.getFullYear();
+
+  if (year < currentYear) {
+    return { label: 'Archived', tone: 'gray', note: `Automatically archived — dated ${year}, a prior year.` };
+  }
+  if (parsed >= windowStart) {
+    return { label: 'Latest', tone: 'green', note: 'Shows in Latest — within the last month.' };
+  }
+  return { label: 'Featured', tone: 'blue', note: `Shows in Featured — dated ${year}. Moves to Archived automatically once ${year + 1} arrives.` };
+}
+
+function ClassificationBadge({ date, manuallyArchived }: { date: string; manuallyArchived: boolean }) {
+  const { label, tone, note } = classifyArticle(date, manuallyArchived);
+  const toneClasses: Record<string, string> = {
+    green: 'bg-green-100 text-green-700',
+    blue:  'bg-blue-100 text-blue-700',
+    amber: 'bg-amber-100 text-amber-700',
+    gray:  'bg-gray-100 text-gray-500',
+  };
+  return (
+    <div className="sm:col-span-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-gray-500">Public status:</span>
+        <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${toneClasses[tone]}`}>{label}</span>
+      </div>
+      <p className="mt-1 text-[11px] text-gray-400">{note}</p>
+    </div>
   );
 }
 
@@ -542,14 +588,22 @@ function UnifiedForm({
       </div>
 
       {/* Toggles */}
-      <div className="flex flex-wrap gap-6">
-        {([{k:'isFeatured',l:'Featured'},{k:'isArchived',l:'Archived'},{k:'isActive',l:'Active'}] as const).map(({k,l}) => (
-          <div key={k} className="flex items-center gap-2">
-            <label className="text-xs font-medium text-gray-600">{l}</label>
-            <Toggle value={f[k]} onChange={v => s(k, v)} />
-          </div>
-        ))}
-      </div>
+    // NEW — replace with this
+<ClassificationBadge date={f.date} manuallyArchived={f.isArchived} />
+
+<div className="flex flex-wrap gap-6">
+  <div className="flex items-center gap-2">
+    <label className="text-xs font-medium text-gray-600">
+      Force Archive
+      <span className="ml-1 font-normal text-gray-400">(override — hide before the year rolls over)</span>
+    </label>
+    <Toggle value={f.isArchived} onChange={v => s('isArchived', v)} />
+  </div>
+  <div className="flex items-center gap-2">
+    <label className="text-xs font-medium text-gray-600">Active</label>
+    <Toggle value={f.isActive} onChange={v => s('isActive', v)} />
+  </div>
+</div>
 
       {isOpinion && opinionPhotoMissing && (
         <p className="text-xs text-amber-600">
