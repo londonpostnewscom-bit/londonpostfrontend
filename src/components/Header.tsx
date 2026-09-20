@@ -627,7 +627,7 @@ export function Header() {
                   </div>
 
                   <div className="mb-5">
-                    <SearchBox />
+                    <SearchBox variant="mobile" />
                   </div>
 
                   <div className="grid gap-3 pb-8">
