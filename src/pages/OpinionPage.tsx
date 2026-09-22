@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { AuthorAvatar } from '../components/AuthorAvatar';
+import { ArchivedFilter } from '../components/ArchivedFilter';
 import { useAuthorPhotos } from '../hooks/useAuthorPhotos';
 import { Article } from '../data/siteData';
 import { PageSkeleton } from '../components/PageSkeleton';
+import { parseArticleDate } from '../utils/articleBuckets';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -30,13 +32,21 @@ function toArticle(a: any): Article {
   } as Article;
 }
 
+// FIXED: previously used `new Date(a.date).getTime()` directly, which
+// silently disagrees with how every other page on the site orders
+// articles (SectionPage/RegionPage/HomePage all go through the shared
+// parseArticleDate helper via bucketArticles/effectiveTime). Any date
+// string that native Date() can't parse cleanly (e.g. "21 July 2026" —
+// day-first, which native Date() gets wrong or fails on) was silently
+// sorting incorrectly here while sorting correctly everywhere else. Using
+// the same parseArticleDate helper the rest of the site relies on keeps
+// ordering consistent everywhere.
 function byDateDesc(a: Article, b: Article) {
-  const dateA = new Date(a.date).getTime();
-  const dateB = new Date(b.date).getTime();
-  if (isNaN(dateA) && isNaN(dateB)) return 0;
-  if (isNaN(dateA)) return 1;
-  if (isNaN(dateB)) return -1;
-  return dateB - dateA;
+  const da = parseArticleDate(a.date);
+  const db = parseArticleDate(b.date);
+  const ta = da ? da.getTime() : -Infinity;
+  const tb = db ? db.getTime() : -Infinity;
+  return tb - ta;
 }
 
 function Byline({ article, size = 'md' }: { article: Article; size?: 'sm' | 'md' | 'lg' }) {
@@ -55,15 +65,20 @@ function Byline({ article, size = 'md' }: { article: Article; size?: 'sm' | 'md'
   );
 }
 
-const FEATURED_BATCH = 6;
-const GRID_BATCH = 4;
+const GRID_BATCH = 6;
+const ARCHIVED_BATCH = 4;
 
 export function OpinionPage() {
   const [articles, setArticles] = useState<Article[]>(opinionCache || []);
   const [loading, setLoading] = useState(opinionCache === null);
-  const [featuredVisible, setFeaturedVisible] = useState(FEATURED_BATCH);
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
-  const [archivedVisible, setArchivedVisible] = useState(GRID_BATCH);
+  const [archivedVisible, setArchivedVisible] = useState(ARCHIVED_BATCH);
+
+  // Month/year-filtered view of the main (non-archived) list — same
+  // filter component and pattern used for Archived on SectionPage/
+  // RegionPage, applied here to the main list instead since Featured
+  // and Latest were merged into one list.
+  const [filteredLatest, setFilteredLatest] = useState<Article[]>([]);
 
   useEffect(() => {
     fetch(`${API_URL}/section-articles/section/opinion`)
@@ -77,16 +92,31 @@ export function OpinionPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  const featuredAll = articles.filter((a) => a.featured && !a.archived).sort(byDateDesc);
-  const latestAll = articles.filter((a) => !a.archived).sort(byDateDesc);
-  const archivedAll = articles.filter((a) => a.archived).sort(byDateDesc);
+  // All non-archived opinion pieces, properly date-sorted — this replaces
+  // the old separate Featured + Latest lists (which showed near-identical
+  // content twice) with a single list.
+  const latestAll = useMemo(
+    () => articles.filter((a) => !a.archived).sort(byDateDesc),
+    [articles]
+  );
+  const archivedAll = useMemo(
+    () => articles.filter((a) => a.archived).sort(byDateDesc),
+    [articles]
+  );
 
-  const visibleFeatured = featuredAll.slice(0, featuredVisible);
-  const visibleLatest = latestAll.slice(0, latestVisible);
+  // Reset the month/year filter (back to "show everything") whenever the
+  // underlying article list actually changes — e.g. once the fetch
+  // resolves — without this the filter would silently show stale/empty
+  // results after data loads in.
+  useEffect(() => {
+    setFilteredLatest(latestAll);
+    setLatestVisible(GRID_BATCH);
+  }, [latestAll]);
+
+  const visibleLatest = filteredLatest.slice(0, latestVisible);
   const visibleArchived = archivedAll.slice(0, archivedVisible);
 
-  const canLoadMoreFeatured = featuredVisible < featuredAll.length;
-  const canLoadMoreLatest = latestVisible < latestAll.length;
+  const canLoadMoreLatest = latestVisible < filteredLatest.length;
   const canLoadMoreArchived = archivedVisible < archivedAll.length;
 
   if (loading) return <PageSkeleton />;
@@ -108,80 +138,50 @@ export function OpinionPage() {
       <div className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
         <div className="grid min-w-0 gap-10 xl:grid-cols-[1fr,300px]">
           <div className="min-w-0">
-            {visibleFeatured.length > 0 && (
+            {latestAll.length > 0 && (
               <div>
-                <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
-                  <span className="h-px w-6 bg-accent" /> Featured
-                </p>
-                <div className="grid min-w-0 gap-5">
-                  {visibleFeatured.map((article) => (
-                    <Link
-                      key={article.id}
-                      to={`/article/${article.id}`}
-                      state={{ source: 'section' }}
-                      className="group block min-w-0 rounded-2xl border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-lg sm:p-9"
-                    >
-                      <span className="inline-block text-xs font-bold uppercase tracking-widest text-accent">
-                        {article.category || 'Opinion'}
-                      </span>
-                      <h2 className="mt-3 break-words font-serif text-2xl font-black leading-tight text-ink transition group-hover:text-accent sm:text-3xl">
-                        {article.title}
-                      </h2>
-                      {article.subtitle && (
-                        <p className="mt-3 break-words text-base leading-relaxed text-slate-600">{article.subtitle}</p>
-                      )}
+                <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+                  <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
+                    <span className="h-px w-6 bg-accent" /> Latest
+                  </p>
+                  <ArchivedFilter
+                    items={latestAll}
+                    onChange={(items) => {
+                      setFilteredLatest(items);
+                      setLatestVisible(GRID_BATCH);
+                    }}
+                  />
+                </div>
 
-                      <div className="mt-6 flex items-center justify-between gap-4 border-t border-slate-100 pt-5">
-                        <Byline article={article} size="lg" />
-                        <span className="hidden shrink-0 rounded-full border border-primary px-5 py-2.5 text-sm font-semibold text-primary transition group-hover:bg-primary group-hover:text-white sm:inline-flex">
-                          Read Full Opinion
+                {visibleLatest.length > 0 ? (
+                  <div className="grid min-w-0 gap-5 sm:grid-cols-2">
+                    {visibleLatest.map((article) => (
+                      <Link
+                        key={article.id}
+                        to={`/article/${article.id}`}
+                        state={{ source: 'section' }}
+                        className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
+                      >
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
+                          {article.category}
                         </span>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-                {canLoadMoreFeatured && (
-                  <div className="mt-6 flex justify-center">
-                    <button
-                      onClick={() => setFeaturedVisible((v) => v + FEATURED_BATCH)}
-                      className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
-                    >
-                      Load More
-                    </button>
+                        <h3 className="mt-2 line-clamp-3 break-words font-serif text-lg font-bold leading-snug text-ink transition group-hover:text-accent">
+                          {article.title}
+                        </h3>
+                        {article.subtitle && (
+                          <p className="mt-2 line-clamp-2 break-words text-sm text-slate-500">{article.subtitle}</p>
+                        )}
+                        <div className="mt-5 border-t border-slate-100 pt-4">
+                          <Byline article={article} size="sm" />
+                        </div>
+                      </Link>
+                    ))}
                   </div>
+                ) : (
+                  <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-sm text-slate-400">
+                    No articles match the selected month/year.
+                  </p>
                 )}
-              </div>
-            )}
-
-            {visibleLatest.length > 0 && (
-              <div className="mt-14">
-                <p className="mb-6 flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-accent">
-                  <span className="h-px w-6 bg-accent" /> Latest
-                </p>
-                <div className="grid min-w-0 gap-5 sm:grid-cols-2">
-                  {visibleLatest.map((article) => (
-                    <Link
-                      key={article.id}
-                      to={`/article/${article.id}`}
-                      state={{ source: 'section' }}
-                      className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
-                    >
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-accent">
-                        {article.category}
-                      </span>
-                      <h3 className="mt-2 line-clamp-3 break-words font-serif text-lg font-bold leading-snug text-ink transition group-hover:text-accent">
-                        {article.title}
-                      </h3>
-                      {article.subtitle && (
-                        <p className="mt-2 line-clamp-2 break-words text-sm text-slate-500">{article.subtitle}</p>
-                      )}
-                      <div className="mt-5 border-t border-slate-100 pt-4">
-                        <Byline article={article} size="sm" />
-                      </div>
-                    </Link>
-                  ))}
-                </div>
 
                 {canLoadMoreLatest && (
                   <div className="mt-6 flex justify-center">
@@ -196,7 +196,7 @@ export function OpinionPage() {
               </div>
             )}
 
-            {visibleArchived.length > 0 && (
+            {archivedAll.length > 0 && (
               <div className="mt-14">
                 <p className="mb-5 text-xs font-bold uppercase tracking-widest text-slate-400">Archived</p>
                 <div className="space-y-2">
@@ -204,7 +204,6 @@ export function OpinionPage() {
                     <Link
                       key={article.id}
                       to={`/article/${article.id}`}
-                      state={{ source: 'section' }}
                       className="flex min-w-0 items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
                     >
                       <AuthorAvatar name={article.author} size="sm" />
@@ -222,7 +221,7 @@ export function OpinionPage() {
                 {canLoadMoreArchived && (
                   <div className="mt-6 flex justify-center">
                     <button
-                      onClick={() => setArchivedVisible((v) => v + GRID_BATCH)}
+                      onClick={() => setArchivedVisible((v) => v + ARCHIVED_BATCH)}
                       className="rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
                     >
                       Load More
