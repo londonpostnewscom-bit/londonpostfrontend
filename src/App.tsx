@@ -15,6 +15,7 @@ import { SectionPage } from './pages/SectionPage';
 import { TeamPage } from './pages/TeamPage';
 import { WhatWeDoPage } from './pages/WhatWeDoPage';
 import { ScrollToTop } from './components/ScrollToTop';
+import { SearchResultsPage } from './pages/SearchResultsPage';
 
 import { AdminAuthProvider } from './admin/context/AdminAuthContext';
 import { ProtectedRoute } from './admin/components/ProtectedRoute';
@@ -55,6 +56,7 @@ function AppContent() {
         <Route path="/about/researchers" element={<ResearchersPage />} />
         <Route path="/about/what-we-do" element={<WhatWeDoPage />} />
         <Route path="/contact" element={<ContactPage />} />
+        <Route path="/search" element={<SearchResultsPage />} />
         <Route path="/regions" element={<RegionsLandingPage />} />
         <Route path="/live" element={<LivePage />} />
         <Route path="/mission-vision" element={<MissionVisionPage />} />
