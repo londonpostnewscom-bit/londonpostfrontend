@@ -15,9 +15,6 @@ type SearchResult = {
   category: string;
 };
 
-// Debounce delay — waits this long after the user stops typing before
-// firing the request, so a fast typist doesn't trigger a query per
-// keystroke.
 const DEBOUNCE_MS = 300;
 
 export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobile' }) {
@@ -32,9 +29,6 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestQueryRef = useRef(0);
 
-  // Fetch results, debounced. A stale response (from a query the user has
-  // since typed past) is discarded via latestQueryRef, so a slow early
-  // response can never overwrite a newer one that arrives first.
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
@@ -68,7 +62,6 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query]);
 
-  // Close on click outside.
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -86,6 +79,15 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
     navigate(`/article/${result.id}`);
   };
 
+  const goToFullResults = () => {
+    const q = query.trim();
+    if (q.length < 2) return;
+    setOpen(false);
+    setQuery('');
+    setResults([]);
+    navigate(`/search?q=${encodeURIComponent(q)}`);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (!open || results.length === 0) {
       if (e.key === 'Escape') {
@@ -95,16 +97,23 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
       return;
     }
 
+    // "See all results" is one slot past the last real result.
+    const maxIndex = results.length; // 0..length-1 = results, length = "see all"
+
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setActiveIndex((i) => (i + 1) % results.length);
+      setActiveIndex((i) => (i + 1) % (maxIndex + 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setActiveIndex((i) => (i <= 0 ? results.length - 1 : i - 1));
+      setActiveIndex((i) => (i <= 0 ? maxIndex : i - 1));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const target = activeIndex >= 0 ? results[activeIndex] : results[0];
-      if (target) goToResult(target);
+      if (activeIndex === maxIndex) {
+        goToFullResults();
+      } else {
+        const target = activeIndex >= 0 ? results[activeIndex] : results[0];
+        if (target) goToResult(target);
+      }
     } else if (e.key === 'Escape') {
       setOpen(false);
       (e.target as HTMLInputElement).blur();
@@ -153,7 +162,7 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
               onMouseEnter={() => setActiveIndex(i)}
               className={`flex w-full items-center gap-3 px-4 py-3 text-left transition ${
                 i === activeIndex ? 'bg-slate-50' : 'bg-white'
-              } ${i !== results.length - 1 ? 'border-b border-slate-100' : ''}`}
+              } border-b border-slate-100`}
             >
               {r.image ? (
                 <img
@@ -173,6 +182,19 @@ export function SearchBox({ variant = 'desktop' }: { variant?: 'desktop' | 'mobi
               </div>
             </button>
           ))}
+
+          {!loading && results.length > 0 && (
+            <button
+              type="button"
+              onClick={goToFullResults}
+              onMouseEnter={() => setActiveIndex(results.length)}
+              className={`block w-full px-4 py-3 text-center text-sm font-semibold text-red-600 transition ${
+                activeIndex === results.length ? 'bg-slate-50' : 'bg-white'
+              }`}
+            >
+              See all results for "{query.trim()}"
+            </button>
+          )}
         </div>
       )}
     </div>
