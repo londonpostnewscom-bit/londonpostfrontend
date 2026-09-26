@@ -1,6 +1,3 @@
-
-
-
 import { useEffect, useState } from 'react';
 import { SectionHeading } from '../components/SectionHeading';
 import { PageSkeleton } from '../components/PageSkeleton';
@@ -47,6 +44,47 @@ function FlagBadges({ countries }: { countries?: { name: string; code: string }[
   );
 }
 
+// Bios vary a lot in length — some (the original seeded team) are a
+// couple of sentences, others added later run much longer and would
+// otherwise stretch cards to very different heights and break the grid's
+// visual rhythm.
+//
+// Truncated by CHARACTER COUNT in plain JS rather than with a CSS
+// line-clamp utility. line-clamp-N depends on either Tailwind 3.3+'s
+// built-in support or the separate @tailwindcss/line-clamp plugin being
+// installed and active — if either isn't the case in this project, the
+// class silently does nothing (no error, no visual effect at all), which
+// is exactly the "still shows the full bio" symptom. Slicing the string
+// directly has no such dependency: it either shows the whole bio or a
+// shortened one, unconditionally, regardless of Tailwind config.
+const BIO_TRUNCATE_LENGTH = 220;
+
+function Bio({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (!text) return null;
+
+  const needsTruncation = text.length > BIO_TRUNCATE_LENGTH;
+  const shown = expanded || !needsTruncation
+    ? text
+    : text.slice(0, BIO_TRUNCATE_LENGTH).trimEnd() + '…';
+
+  return (
+    <div>
+      <p className="mt-4 text-sm leading-7 text-slate-600">{shown}</p>
+      {needsTruncation && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-2 text-xs font-bold uppercase tracking-wide text-accent hover:underline"
+        >
+          {expanded ? 'Read Less' : 'Read More'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function MemberCard({ member }: { member: TeamMember }) {
   return (
     <article className="group h-full rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm transition duration-300 hover:-translate-y-1 hover:shadow-xl">
@@ -70,7 +108,7 @@ function MemberCard({ member }: { member: TeamMember }) {
           <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.28em] text-accent">
             {member.role}
           </p>
-          <p className="mt-4 text-sm leading-7 text-slate-600">{member.bio}</p>
+          <Bio text={member.bio} />
         </div>
       </div>
     </article>
