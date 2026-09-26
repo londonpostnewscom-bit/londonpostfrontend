@@ -41,6 +41,7 @@ import { DisclaimerPage } from './pages/DisclaimerPage';
 import { AdminAllPages } from './admin/pages/sections/AdminAllPages';
 import {AdminLivePage } from "./admin/pages/sections/Adminlivepage"
 import { AdminTeam } from './admin/pages/sections/AdminTeam';
+import { TeamAdmin } from './admin/pages/sections/TeamAdmin';
 function AppContent() {
   const location = useLocation();
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -85,6 +86,7 @@ function AppContent() {
         >
           <Route index element={<Navigate to="/admin/hero" replace />} />
           <Route path="hero" element={<AdminHero />} />
+          <Route path="add-team" element={<TeamAdmin/>} />
           <Route path="banners" element={<AdminBanners />} />
           <Route path="hot-topics" element={<AdminHotTopics />} />
           <Route path="latest-headlines" element={<AdminLatestHeadlines />} />
