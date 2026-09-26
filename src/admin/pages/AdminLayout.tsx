@@ -18,6 +18,8 @@ const NAV_OTHER = [
   { path: '/admin/page-banner', label: 'Banner — All Pages', icon: '🖼️', desc: 'Right sidebar on every page' },
   { path: '/admin/contact-requests', label: 'Contact Requests', icon: '📩', desc: 'Contact + header query form submissions' },
   { path: '/admin/team', label: 'Team members Record', icon: '👥', desc: 'Team members here' },
+    { path: '/admin/add-team', label: 'Add Team Member Here', icon: '👥', desc: 'Adding team member here' },
+
 ];
 
 const GROUPS = [
