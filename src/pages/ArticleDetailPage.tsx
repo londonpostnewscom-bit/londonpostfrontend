@@ -1,3 +1,4 @@
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -697,11 +698,18 @@ export function ArticleDetailPage() {
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen />
               </div>
-            ) : article.imageUrl && (
-              <div className="mb-8 overflow-hidden rounded-2xl shadow-sm">
-                <img src={cld(article.imageUrl, 1200)} alt={article.title}
-                  className="w-full object-cover"
-                  style={{ maxHeight: '460px', minHeight: '260px' }} />
+                     ) : article.imageUrl && (
+              <div className="mb-8">
+                <div className="overflow-hidden rounded-2xl shadow-sm">
+                  <img src={cld(article.imageUrl, 1200)} alt={article.title}
+                    className="w-full object-cover"
+                    style={{ maxHeight: '460px', minHeight: '260px' }} />
+                </div>
+                {article.imageCredit?.trim() && (
+                  <p className="mt-2 text-right text-xs italic text-slate-500">
+                    Photo: {article.imageCredit.trim()}
+                  </p>
+                )}
               </div>
             )}
 
