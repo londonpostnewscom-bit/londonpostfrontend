@@ -321,10 +321,12 @@ function OpinionAuthorPhoto({
 
 type SectionConfig = typeof ALL_SECTIONS[0];
 
+
+
 const FORM_EMPTY = {
   title:'', subtitle:'', content:'', author:'', date:'', category:'',
   subCategory:'', hashtags:[] as string[], isFeatured:false, isArchived:false,
-  isActive:true, sortOrder:0, videoId:'',
+  isActive:true, sortOrder:0, videoId:'', imageCredit:'',
 };
 
 function UnifiedForm({
@@ -559,7 +561,7 @@ function UnifiedForm({
         </div>
       </div>
 
-      {/* Cover image — hidden entirely for Opinion, since Opinion pieces no
+         {/* Cover image — hidden entirely for Opinion, since Opinion pieces no
           longer use a cover image at all (author photo replaces it visually). */}
       {!isOpinion && (
         <div>
@@ -572,9 +574,19 @@ function UnifiedForm({
             />
           </div>
           <p className="mt-1 text-xs text-gray-400">This is the main cover image shown in listings and at the top of the article.</p>
+
+          <div className="mt-3">
+            <label className="label">Cover Image Credit <span className="font-normal text-gray-400">(optional)</span></label>
+            <input
+              value={f.imageCredit || ''}
+              onChange={e => s('imageCredit', e.target.value)}
+              placeholder="e.g. Reuters / John Smith / Getty Images"
+              className="input w-full"
+            />
+            <p className="mt-1 text-[11px] text-gray-400">Leave empty to show no credit.</p>
+          </div>
         </div>
       )}
-
       {/* Block editor */}
       <div>
         <div className="mb-2 flex items-center justify-between">
