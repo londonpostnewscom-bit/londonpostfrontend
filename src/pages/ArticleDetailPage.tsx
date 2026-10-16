@@ -1,11 +1,12 @@
 
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { AuthorAvatar } from '../components/AuthorAvatar';
 import { cld } from '../utils/Cloudinary';
 import { ArticleSkeleton } from '../components/PageSkeleton';
-
+import { articleUrl, isMongoId } from '../utils/articleUrl';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Per-article in-memory cache, same pattern as Home/Opinion — survives SPA
@@ -507,7 +508,8 @@ function ShareSidebar({ title }: { title: string }) {
 }
 
 export function ArticleDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: param = '' } = useParams<{ id: string }>();
+const isOldId = isMongoId(param);
   const navigate = useNavigate();
   const location = useLocation();
   // When we arrived here via one of our own <Link> components, the source
@@ -523,10 +525,10 @@ export function ArticleDetailPage() {
   const [notFound, setNotFound] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (!id) return;
+    useEffect(() => {
+    if (!param) return;
 
-    const cached = articleCache.get(id);
+    const cached = articleCache.get(param);
     if (cached) {
       setArticle(cached.article);
       setRelated(cached.related);
@@ -540,46 +542,38 @@ export function ArticleDetailPage() {
     setRelated([]);
     setNotFound(false);
 
-    const fetchRegion = () => fetch(`${API_URL}/region-articles/${id}`).then(r => (r.ok ? r.json() : null));
-    const fetchSection = () => fetch(`${API_URL}/section-articles/${id}`).then(r => (r.ok ? r.json() : null));
+    const fetchRegion = () => fetch(`${API_URL}/region-articles/${param}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
+    const fetchSection = () => fetch(`${API_URL}/section-articles/${param}`).then(r => (r.ok ? r.json() : null)).catch(() => null);
 
     const tryFetch = async () => {
       let art: any = null;
       let source = '';
 
-      if (sourceHint === 'region' || sourceHint === 'section') {
-        // We know which collection this came from — query only that one.
-        // No wrong-guess request means no 404 in the console for the
-        // normal case of clicking a link somewhere on the site.
+      if (!isOldId) {
+        // New-style link: look up by slug.
+        try {
+          const r = await fetch(`${API_URL}/all-articles/by-slug/${encodeURIComponent(param)}`);
+          if (r.ok) { const d = await r.json(); art = d.article; source = d.source; }
+        } catch {}
+      } else if (sourceHint === 'region' || sourceHint === 'section') {
         const first = sourceHint === 'region' ? await fetchRegion() : await fetchSection();
-        if (first) {
-          art = first;
-          source = sourceHint;
-        } else {
-          // Hint turned out stale (rare — e.g. content moved sections).
-          // Fall back to the other collection.
-          const fallbackSource = sourceHint === 'region' ? 'section' : 'region';
-          const fallback = fallbackSource === 'region' ? await fetchRegion() : await fetchSection();
-          if (fallback) { art = fallback; source = fallbackSource; }
+        if (first) { art = first; source = sourceHint; }
+        else {
+          const fb = sourceHint === 'region' ? 'section' : 'region';
+          const fallback = fb === 'region' ? await fetchRegion() : await fetchSection();
+          if (fallback) { art = fallback; source = fb; }
         }
       } else {
-        // No hint available — direct URL visit, browser refresh, or a
-        // shared/bookmarked link. We genuinely don't know which collection
-        // holds this ID, so we ask both in parallel as before. This path
-        // is uncommon compared to normal in-site clicks.
         const [regionResult, sectionResult] = await Promise.allSettled([fetchRegion(), fetchSection()]);
-        if (regionResult.status === 'fulfilled' && regionResult.value) {
-          art = regionResult.value;
-          source = 'region';
-        } else if (sectionResult.status === 'fulfilled' && sectionResult.value) {
-          art = sectionResult.value;
-          source = 'section';
-        }
+        if (regionResult.status === 'fulfilled' && regionResult.value) { art = regionResult.value; source = 'region'; }
+        else if (sectionResult.status === 'fulfilled' && sectionResult.value) { art = sectionResult.value; source = 'section'; }
       }
 
       if (!art) { setNotFound(true); setLoading(false); return; }
 
       setArticle(art);
+      const artId = String(art._id || art.id);
+      let relatedList: any[] = [];
 
       try {
         const keywords = getKeywords(art.title || '');
@@ -592,29 +586,28 @@ export function ArticleDetailPage() {
           if (r.ok) allArticles = await r.json();
         }
         const scored = allArticles
-          .filter((a: any) => (a._id || a.id) !== id && a.isActive !== false)
+          .filter((a: any) => String(a._id || a.id) !== artId && a.isActive !== false)
           .map((a: any) => ({ ...a, _score: getKeywords(a.title || '').filter((kw) => keywords.includes(kw)).length }))
           .sort((a: any, b: any) => b._score - a._score)
           .slice(0, 3);
-        let relatedList: any[] = [];
         if (scored.length < 2) {
           const existing = new Set(scored.map((a: any) => a._id));
-          const extras = allArticles.filter((a: any) => (a._id || a.id) !== id && !existing.has(a._id)).slice(0, 3 - scored.length);
+          const extras = allArticles.filter((a: any) => String(a._id || a.id) !== artId && !existing.has(a._id)).slice(0, 3 - scored.length);
           relatedList = [...scored, ...extras];
         } else {
           relatedList = scored;
         }
         setRelated(relatedList);
-        articleCache.set(id, { article: art, related: relatedList });
-      } catch {
-        articleCache.set(id, { article: art, related: [] });
-      }
+      } catch {}
 
+      const entry = { article: art, related: relatedList };
+      articleCache.set(param, entry);
+      if (art.slug) articleCache.set(art.slug, entry);
       setLoading(false);
     };
 
     tryFetch();
-  }, [id]);
+  }, [param]);
 
   // Attaches the copy interceptor to the article content column. Uses
   // window.location.href so the appended link always matches whatever
@@ -624,10 +617,16 @@ export function ArticleDetailPage() {
   // `ready` gates this to the moment loading finishes AND article data
   // exists — that's exactly when contentRef.current stops being null,
   // which is the fix for the bug where the listener never attached.
-  const articleUrl = typeof window !== 'undefined' ? window.location.href : '';
+    const pageHref = typeof window !== 'undefined' ? window.location.href : '';
   const copyProtectionReady = !loading && !!article;
-  useArticleCopyProtection(contentRef, articleUrl, copyProtectionReady);
-
+  useArticleCopyProtection(contentRef, pageHref, copyProtectionReady);
+  useEffect(() => {
+    if (!article) return;
+    document.title = `${article.title} | Londonpost`;
+    if (article.slug && param !== article.slug) {
+      navigate(`/article/${article.slug}`, { replace: true, state: location.state });
+    }
+  }, [article]);
   if (loading) return <ArticleSkeleton />;
 
   if (notFound || !article) return (
@@ -782,7 +781,7 @@ export function ArticleDetailPage() {
                   {related.map((rel: any) => {
                     const relId = rel._id || rel.id || '';
                     const isRelVideo = rel.section === 'video';
-                    const linkTo = isRelVideo ? `/video/${relId}` : `/article/${relId}`;
+                    const linkTo = isRelVideo ? `/video/${relId}` : articleUrl(rel);
                     return (
                       <Link key={relId} to={linkTo} state={!isRelVideo ? { source: article.region ? 'region' : 'section' } : undefined}
                         className="group overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-soft">
