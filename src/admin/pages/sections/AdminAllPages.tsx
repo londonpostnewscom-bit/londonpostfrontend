@@ -62,8 +62,8 @@ function slugify(s: string) {
 }
 function normalizeHashtags(text: string): string[] {
   return [...new Set(
-    text.split(',').map(t => t.trim()).filter(Boolean)
-      .map(t => t.replace(/^#+/,'').replace(/\s+/g,'-').replace(/[^a-zA-Z0-9-_]/g,''))
+    text.split(/[,،]/).map(t => t.trim()).filter(Boolean)
+      .map(t => t.replace(/^#+/,'').replace(/\s+/g,'-').replace(/[^\p{L}\p{N}\p{M}_-]/gu,''))
       .filter(Boolean).slice(0,20)
   )];
 }
