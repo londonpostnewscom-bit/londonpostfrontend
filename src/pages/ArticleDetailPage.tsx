@@ -1,5 +1,6 @@
 
 
+
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -96,7 +97,7 @@ function SafeHtml({ html, className }: { html: string; className?: string }) {
     });
   }, [html]);
 
-  return <div ref={ref} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
+    return <div ref={ref} className={className} dir="auto" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function getKeywords(title: string): string[] {
@@ -105,7 +106,7 @@ function getKeywords(title: string): string[] {
     'is','are','was','were','how','what','why','when','who','that','this','has','have','its','their'
   ]);
   return title.toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/[^\p{L}\p{N}\p{M}\s]/gu, '')
     .split(/\s+/)
     .filter((w) => w.length > 3 && !stop.has(w));
 }
@@ -256,7 +257,7 @@ function ArticleBlock({ block }: { block: { type: string; value?: string; url?: 
     const safe = isHTML(html) ? decodeAndStrip(html) : html;
     return isHTML(html)
       ? <SafeHtml className="prose-article" html={safe} />
-      : <div className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{safe}</div>;
+            : <div dir="auto" className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{safe}</div>;
   }
 
   return null;
@@ -716,11 +717,11 @@ const isOldId = isMongoId(param);
               {article.category || article.section || ''}
             </div>
 
-            <h1 className="mt-4 text-3xl font-black leading-tight text-ink lg:text-4xl">
+                        <h1 dir="auto" className="mt-4 text-3xl font-black leading-tight text-ink lg:text-4xl">
               {article.title}
             </h1>
 
-            {article.subtitle && <p className="mt-3 text-lg text-slate-600">{article.subtitle}</p>}
+                       {article.subtitle && <p dir="auto" className="mt-3 text-lg text-slate-600">{article.subtitle}</p>}
 
             {/* Byline — author photo only shows for Opinion articles, since
                 that's the only place author photos are used across the site
@@ -764,7 +765,7 @@ const isOldId = isMongoId(param);
               content && (
                 isHTML(content)
                   ? <SafeHtml className="prose-article" html={decodeAndStrip(content)} />
-                  : <div className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{content}</div>
+                                    : <div dir="auto" className="prose-article whitespace-pre-wrap text-slate-700 leading-relaxed">{content}</div>
               )
             )}
 
