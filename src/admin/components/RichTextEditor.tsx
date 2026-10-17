@@ -1,3 +1,4 @@
+
 import { useEffect, useRef, useState } from 'react';
 import { sanitizeHtml } from '../utils/sanitize';
 import { useAdminAuth } from '../context/AdminAuthContext';
@@ -289,12 +290,8 @@ export function RichTextEditor({ value, onChange, placeholder }: {
   const activeFigureRef = useRef<HTMLElement | null>(null);
   const [imgToolbarPos, setImgToolbarPos] = useState<{ top: number; left: number } | null>(null);
 
-  // NEW: floating selection toolbar — appears directly above whatever
-  // text is currently highlighted, anywhere in the article body. This is
-  // what fixes "I have to scroll back up to the top toolbar every time I
-  // want to bold something in a long article" — Bold/Italic/Underline/
-  // Link are now available right where the selection is, the same way
-  // Medium/Notion/Google Docs do it.
+  // Floating selection toolbar — appears directly above whatever text is
+  // currently highlighted, anywhere in the article body.
   const [selToolbarPos, setSelToolbarPos] = useState<{ top: number; left: number } | null>(null);
 
   useEffect(() => {
@@ -318,11 +315,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
     sel?.addRange(range);
   };
 
-  // Recomputes (or hides) the floating selection toolbar based on the
-  // browser's current text selection. Positioned relative to the same
-  // wrapping element the image toolbar already uses, via the selection
-  // range's own bounding box — so it always sits right above whatever
-  // was just highlighted, regardless of how far down the article that is.
   const updateSelectionToolbar = () => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0 || !editorRef.current) {
@@ -640,6 +632,7 @@ export function RichTextEditor({ value, onChange, placeholder }: {
           ref={editorRef}
           contentEditable
           suppressContentEditableWarning
+          dir="auto"
           onInput={handleInput}
           onBlur={() => { handleInput(); saveSelection(); setSelToolbarPos(null); }}
           onMouseUp={() => { saveSelection(); updateSelectionToolbar(); }}
@@ -677,14 +670,6 @@ export function RichTextEditor({ value, onChange, placeholder }: {
             empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400"
         />
 
-        {/* Floating selection toolbar — Bold / Italic / Underline / Link,
-            positioned right above whatever text is currently highlighted.
-            Every button preventDefault()s its own mousedown, exactly like
-            the fixed toolbar above, so clicking it never steals focus
-            away from the contentEditable — the selection stays exactly
-            where it was, meaning the format command applies to the right
-            text and the toolbar can stay open for a second/third action
-            (e.g. Bold, then Underline) on the same highlighted text. */}
         {selToolbarPos && (
           <div
             className="absolute z-20 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-gray-900 px-1.5 py-1 shadow-lg"
