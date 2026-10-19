@@ -1,8 +1,10 @@
+
+
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { SectionHeading } from '../components/SectionHeading';
-import { Article, articles as staticArticles, moreMenu } from '../data/siteData';
+import { Article, moreMenu } from '../data/siteData';
 import { PaginatedArticles } from '../components/PaginatedArticles';
 import { ArchivedFilter } from '../components/ArchivedFilter';
 import { bucketArticles } from '../utils/articleBuckets';
@@ -52,9 +54,7 @@ const SLUG_ALIASES: Record<string, string> = {
 // naturally since the module re-initializes.
 const sectionCache = new Map<string, Article[]>();
 
-function slugify(s: string) {
-  return s.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-}
+
 
 function apiToArticle(a: any): Article {
   return {
@@ -167,9 +167,6 @@ export function SectionPage() {
     setArchivedVisible(GRID_BATCH);
   }, [slug]);
 
-  const staticMatch = useMemo(() => {
-    return staticArticles.filter((a) => slugify(a.category) === slug || slugify(a.topic || '') === slug);
-  }, [slug]);
 
   // Static fallback data only ever applies AFTER the real fetch has
   // finished and genuinely came back empty — never during the loading
@@ -181,8 +178,7 @@ export function SectionPage() {
   // fed into the useEffect further down, so every render looked like
   // "the data changed," triggering setState, triggering another render,
   // forever, until loading finished.
-  const source = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : EMPTY_ARTICLES);
-
+const source = apiLoaded ? apiArticles : EMPTY_ARTICLES;
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Memoized so it only changes when the article list actually changes,
   // which is what lets the effect below sit safely in a dependency array
