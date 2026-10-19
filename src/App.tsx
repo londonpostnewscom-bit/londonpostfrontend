@@ -62,7 +62,7 @@ function AppContent() {
         <Route path="/live" element={<LivePage />} />
         <Route path="/mission-vision" element={<MissionVisionPage />} />
         <Route path="/membership" element={<MembershipPage />} />
-        <Route path="/more" element={<Navigate to="/section/world-news" replace />} />
+        <Route path="/more" element={<Navigate to="/section/world" replace />} />
         <Route path="/section/:slug" element={<SectionPage />} />
         <Route path="/region/:area" element={<RegionPage />} />
         <Route path="/region/:area/:country" element={<RegionPage />} />
