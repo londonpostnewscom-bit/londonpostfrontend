@@ -1,10 +1,11 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { ArchivedFilter } from '../components/ArchivedFilter';
 import { SectionHeading } from '../components/SectionHeading';
 import { PaginatedArticles } from '../components/PaginatedArticles';
-import { Article, articles as staticArticles, regionMenus } from '../data/siteData';
+import { Article, regionMenus } from '../data/siteData';
 import { slugify } from '../utils/helpers';
 import { bucketArticles } from '../utils/articleBuckets';
 
@@ -145,16 +146,7 @@ export function RegionPage() {
     setArchivedVisible(GRID_BATCH);
   }, [area, selectedCategory]);
 
-  const staticMatch = useMemo(() => {
-    if (selectedCategory) {
-      return staticArticles.filter((a) => a.region.toLowerCase() === selectedCategory.toLowerCase());
-    }
-    return staticArticles.filter((a) =>
-      a.region.toLowerCase() === meta.label.toLowerCase() ||
-      a.region.toLowerCase() === area.toLowerCase() ||
-      categories.some((c: string) => a.region.toLowerCase() === c.toLowerCase())
-    );
-  }, [selectedCategory, meta.label, area, categories]);
+  
 
   // Static fallback only applies once the real fetch has finished and
   // genuinely came back empty — not during the loading window, which now
@@ -162,8 +154,7 @@ export function RegionPage() {
   // Uses the shared EMPTY_ARTICLES constant (not a fresh `[]`) so this
   // doesn't produce a new array reference on every render while loading —
   // see the comment on EMPTY_ARTICLES above for why that matters.
-  const sourceArticles = apiLoaded && apiArticles.length > 0 ? apiArticles : (apiLoaded ? staticMatch : EMPTY_ARTICLES);
-
+const sourceArticles = apiLoaded ? apiArticles : EMPTY_ARTICLES;
   // Date-driven buckets — see utils/articleBuckets.ts for the rules.
   // Recomputed only when the underlying article list actually changes,
   // so it can safely sit in effect dependency arrays below without
