@@ -6,7 +6,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
+          "value": ".*(Googlebot|bingbot|DuckDuckBot|YandexBot|facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
         }
       ],
       "destination": "https://londonpostbackend-production.up.railway.app/article/:id"
@@ -17,7 +17,7 @@
         {
           "type": "header",
           "key": "user-agent",
-          "value": ".*(facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
+          "value": ".*(Googlebot|bingbot|DuckDuckBot|YandexBot|facebookexternalhit|Facebot|WhatsApp|Twitterbot|LinkedInBot|Slackbot|TelegramBot|Discordbot|SkypeUriPreview|Pinterest|redditbot|vkShare|Applebot|Google-InspectionTool).*"
         }
       ],
       "destination": "https://londonpostbackend-production.up.railway.app/video/:id"
