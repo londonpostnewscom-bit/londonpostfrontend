@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/sitemap.xml",
+      "destination": "https://londonpostbackend-production.up.railway.app/sitemap.xml"
+    },
+    {
       "source": "/article/:id",
       "has": [
         {
