@@ -7,33 +7,34 @@ type PageMeta = { title: string; description: string; path: string };
 export function usePageMeta({ title, description, path }: PageMeta) {
   useEffect(() => {
     const prevTitle = document.title;
-
-    const descEl = document.querySelector<HTMLMetaElement>('meta[name="description"]');
-    const prevDesc = descEl?.getAttribute('content') ?? null;
-    let createdDesc: HTMLMetaElement | null = null;
-
     document.title = title;
 
-    if (descEl) {
-      descEl.setAttribute('content', description);
-    } else {
-      createdDesc = document.createElement('meta');
-      createdDesc.name = 'description';
-      createdDesc.content = description;
-      document.head.appendChild(createdDesc);
+    let descEl = document.querySelector<HTMLMetaElement>('meta[name="description"]');
+    const descCreated = !descEl;
+    const prevDesc = descEl?.getAttribute('content') ?? '';
+    if (!descEl) {
+      descEl = document.createElement('meta');
+      descEl.name = 'description';
+      document.head.appendChild(descEl);
     }
+    descEl.setAttribute('content', description);
 
-    const canonical = document.createElement('link');
-    canonical.rel = 'canonical';
-    canonical.href = SITE + path;
-    canonical.setAttribute('data-page-meta', 'true');
-    document.head.appendChild(canonical);
+    let linkEl = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    const linkCreated = !linkEl;
+    const prevHref = linkEl?.getAttribute('href') ?? '';
+    if (!linkEl) {
+      linkEl = document.createElement('link');
+      linkEl.rel = 'canonical';
+      document.head.appendChild(linkEl);
+    }
+    linkEl.setAttribute('href', SITE + path);
 
     return () => {
       document.title = prevTitle;
-      if (descEl && prevDesc !== null) descEl.setAttribute('content', prevDesc);
-      if (createdDesc) createdDesc.remove();
-      canonical.remove();
+      if (descCreated) descEl!.remove();
+      else descEl!.setAttribute('content', prevDesc);
+      if (linkCreated) linkEl!.remove();
+      else linkEl!.setAttribute('href', prevHref);
     };
   }, [title, description, path]);
 }
