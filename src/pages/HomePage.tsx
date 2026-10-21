@@ -6,6 +6,7 @@ import { Article, articles as staticArticles } from '../data/siteData';
 import { PartnersMarquee } from '../components/PartnersMarquee';
 import { cld } from '../utils/Cloudinary';
 import { AuthorAvatar } from '../components/AuthorAvatar';
+import { usePageMeta } from '../utils/usePageMeta';
 type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure'; 
 
 const TONE: Record<Tone, {
@@ -954,6 +955,11 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
 }
 
 export function HomePage() {
+  usePageMeta({
+    title: 'Londonpost | World News, Regional Coverage & Analysis',
+    description: 'Londonpost delivers in-depth reporting, regional coverage and analysis on world affairs, diplomacy, economy and technology.',
+    path: '/',
+  });
   const staticUK      = useMemo(() => staticArticles.filter(a => a.region === 'United Kingdom').slice(0, 4), []);
   const staticEdPick  = useMemo(() => staticArticles.filter(a => a.featured).slice(0, 4), []);
   const staticIntvw   = useMemo(() => staticArticles.filter(a => a.category === 'Interviews' || a.topic === 'Interviews').slice(0, 4), []);
