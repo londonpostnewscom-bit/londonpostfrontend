@@ -59,6 +59,7 @@ function apiToArticle(a: any): Article {
     featured: a.isFeatured || false,
     archived: a.isArchived || false,
     topic:    a.category || '',
+     ...(a.slug ? { slug: a.slug } : {}),
     ...(Array.isArray(a.hashtags) ? { hashtags: a.hashtags } : {}),
   } as Article;
 }
