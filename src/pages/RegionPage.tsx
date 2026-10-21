@@ -8,6 +8,7 @@ import { PaginatedArticles } from '../components/PaginatedArticles';
 import { Article, regionMenus } from '../data/siteData';
 import { slugify } from '../utils/helpers';
 import { bucketArticles } from '../utils/articleBuckets';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -96,7 +97,17 @@ export function RegionPage() {
   const categories = (regionMenus as any)[area] || [];
   const hasCategories = categories.length > 0;
   const selectedCategory = categories.find((c: string) => slugify(c) === country) || null;
-
+usePageMeta({
+  title: selectedCategory
+    ? `${selectedCategory} | ${meta.label} | Londonpost`
+    : `${meta.label} | Londonpost`,
+  description: selectedCategory
+    ? `Latest news and analysis from ${selectedCategory}, covered by Londonpost's ${meta.label} desk.`
+    : `${meta.description} Latest news and analysis from Londonpost.`,
+  path: selectedCategory
+    ? `/region/${area}/${slugify(selectedCategory)}`
+    : `/region/${area}`,
+});
   const key = cacheKey(area, selectedCategory);
   const cached = regionCache.get(key);
   const [apiArticles, setApiArticles] = useState<Article[]>(cached || EMPTY_ARTICLES);
