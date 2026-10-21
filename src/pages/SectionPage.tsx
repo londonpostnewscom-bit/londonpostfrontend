@@ -8,6 +8,7 @@ import { Article, moreMenu } from '../data/siteData';
 import { PaginatedArticles } from '../components/PaginatedArticles';
 import { ArchivedFilter } from '../components/ArchivedFilter';
 import { bucketArticles } from '../utils/articleBuckets';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -117,7 +118,11 @@ export function SectionPage() {
   // world, etc.).
   const menuMatch = moreMenu.find((item) => item.value === slug);
   const title = menuMatch ? menuMatch.label : toTitle(rawSlug);
-
+usePageMeta({
+  title: `${title} | Londonpost`,
+  description: `Latest news, analysis and reporting from the ${title} desk at Londonpost.`,
+  path: `/section/${menuMatch?.urlSlug || menuMatch?.value || rawSlug}`,
+});
   const cached = sectionCache.get(slug);
   const [apiArticles, setApiArticles] = useState<Article[]>(cached || EMPTY_ARTICLES);
   const [apiLoaded, setApiLoaded] = useState(!!cached);
