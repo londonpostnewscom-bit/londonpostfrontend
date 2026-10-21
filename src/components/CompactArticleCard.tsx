@@ -1,5 +1,10 @@
+
+
+
+
 import { Link } from 'react-router-dom';
 import { Article } from '../data/siteData';
+import { articleUrl } from '../utils/articleUrl';
 
 export function CompactArticleCard({
   article,
@@ -9,7 +14,7 @@ export function CompactArticleCard({
   sourceHint?: 'region' | 'section';
 }) {
   const isVideo = (article as any).section === 'video' || (article as any).videoId;
-  const linkTo = isVideo ? `/video/${article.id}` : `/article/${article.id}`;
+  const linkTo = isVideo ? `/video/${article.id}` : articleUrl(article);
 
   return (
     <Link
