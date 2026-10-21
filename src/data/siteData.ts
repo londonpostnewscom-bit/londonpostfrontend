@@ -53,7 +53,7 @@ export const moreMenu = [
   { value: 'editors-picks',      label: "Editor's Picks" },
   { value: 'in-focus',           label: 'In Focus' },
   { value: 'aviation',           label: 'Aviation' },
-  { value: 'kazakhstan-kurultai-elections-2026', label: 'kazakhstan-kurultai-elections-2026' },
+  { value: 'kazakhstan-kurultai-elections-2026', label: 'Kazakhstan Kurultai Elections 2026' },
   { value: 'world-nomad-games-2026', label: 'World Nomad Games 2026' },
  { value: 'the-nuclear-question', label: 'The Nuclear Question' },
 
