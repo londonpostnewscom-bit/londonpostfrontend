@@ -7,7 +7,8 @@ import { PartnersMarquee } from '../components/PartnersMarquee';
 import { cld } from '../utils/Cloudinary';
 import { AuthorAvatar } from '../components/AuthorAvatar';
 import { usePageMeta } from '../utils/usePageMeta';
-type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure'; 
+import { articleUrl } from '../utils/articleUrl';
+type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure';
 
 const TONE: Record<Tone, {
   text: string; textFaint: string; bg: string; tick: string;
@@ -66,6 +67,7 @@ function toArticle(a: any): Article {
     region:   a.region || '',
     featured: a.isFeatured || a.featured || false,
     topic:    a.category || '',
+    ...(a.slug ? { slug: a.slug } : {}),
     ...(Array.isArray(a.hashtags) ? { hashtags: a.hashtags } : {}),
     ...(a.section ? { section: a.section } : {}),
     ...(a.videoId ? { videoId: a.videoId } : {}),
@@ -104,7 +106,7 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
       ca:   mapReg('central-asia'),
       eu:   mapReg('europe-home'),
       ru:   mapReg('russia-home'),
-      dc:   mapSec('geopolitical-dispatch'),
+      dc:   (sections['diplomatic-corner'] || sections['geopolitical-dispatch'] || []).map(toArticle),
       tash: mapSec('tashkent'),
       cauc: {
         armenia:    (caucasusR.armenia || []).map(toArticle),
@@ -240,7 +242,7 @@ function ListRow({
   const t = TONE[tone];
   return (
     <Link
-      to={`/article/${article.id}`}
+      to={`${articleUrl(article)}`}
       className={`group flex gap-4 py-4 first:pt-0 last:pb-0 ${divider ? (dark ? 'border-white/10' : 'border-slate-200') : ''} ${divider ? 'border-b last:border-b-0' : ''}`}
     >
       {typeof index === 'number' && (
@@ -272,7 +274,7 @@ function LeadHorizontalCard({
   const t = TONE[tone];
   return (
     <Link
-      to={`/article/${article.id}`}
+      to={`${articleUrl(article)}`}
       className={`group flex flex-col overflow-hidden rounded-xl border bg-white shadow-sm transition hover:shadow-md sm:flex-row ${t.border} ${imageSide === 'right' ? 'sm:flex-row-reverse' : ''}`}
     >
       <div className={`relative shrink-0 overflow-hidden ${imageWidth}`}>
@@ -356,7 +358,7 @@ function EditorsPicksSection({ articles }: { articles: Article[] }) {
         <CenterHeader tone="gold" title="Editor's Picks" titleTo="/section/editors-picks"
           description="Hand-selected stories from our editorial team — the most important reads this week." />
         <div className="grid gap-6 xl:grid-cols-[1.35fr,1fr]">
-          <Link to={`/article/${top.id}`} className="group relative overflow-hidden rounded-xl border border-gold/20 shadow-sm">
+          <Link to={`${articleUrl(top)}`} className="group relative overflow-hidden rounded-xl border border-gold/20 shadow-sm">
             <div className="aspect-[16/10] overflow-hidden">
               {top.image
                 ? <img src={cld(top.image, 1200)} alt={top.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -394,7 +396,7 @@ function InFocusSection({ articles }: { articles: Article[] }) {
       <CenterHeader tone="crimson" title="In Focus" titleTo="/section/in-focus"
         description="Deep dives and long-form analysis on the stories that demand closer attention." />
       <div className="grid gap-6 lg:grid-cols-3">
-        <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-accent/15 lg:col-span-2">
+        <Link to={`${articleUrl(lead)}`} className="group relative overflow-hidden rounded-xl border border-accent/15 lg:col-span-2">
           <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
             {lead.image
               ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -411,7 +413,7 @@ function InFocusSection({ articles }: { articles: Article[] }) {
         </Link>
         <div className="flex flex-col justify-between gap-5">
           {rest.slice(0, 3).map((article, i) => (
-            <Link key={article.id} to={`/article/${article.id}`}
+            <Link key={article.id} to={`${articleUrl(article)}`}
               className="group flex flex-1 gap-4 rounded-lg border border-accent/10 bg-white p-4 transition hover:border-accent/30 hover:shadow-sm">
               <span className="shrink-0 pt-0.5 text-[11px] font-black tracking-widest text-accent/40">F.{String(i + 2).padStart(2, '0')}</span>
               <div className="min-w-0 flex-1">
@@ -440,7 +442,7 @@ function InterviewsSection({ articles }: { articles: Article[] }) {
           description="In-depth conversations with policymakers, analysts and global voices." />
         <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
           {articles.map(article => (
-            <Link key={article.id} to={`/article/${article.id}`} className="group relative overflow-hidden rounded-xl border border-lagoon/15">
+            <Link key={article.id} to={`${articleUrl(article)}`} className="group relative overflow-hidden rounded-xl border border-lagoon/15">
               <div className="aspect-[3/4] overflow-hidden">
                 {article.image
                   ? <img src={cld(article.image, 700)} alt={article.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -526,7 +528,7 @@ function OpinionSection({ articles }: { articles: Article[] }) {
         />
         <div className="mx-auto grid max-w-5xl divide-y divide-slate-200 sm:grid-cols-2 sm:divide-y-0">
           {articles.map((article, i) => (
-            <Link key={article.id} to={`/article/${article.id}`}
+            <Link key={article.id} to={`${articleUrl(article)}`}
               className={`group flex gap-4 py-6 sm:px-6 ${i % 2 === 0 ? 'sm:border-r sm:border-slate-200' : ''}`}>
               <AuthorAvatar name={article.author} size="md" />
               <div className="min-w-0 flex-1">
@@ -551,7 +553,7 @@ function CentralAsiaSection({ articles }: { articles: Article[] }) {
           description="Strategic reporting from Kazakhstan, Uzbekistan, Kyrgyzstan, Tajikistan and Turkmenistan."
         />
         <ArrowCarousel tone="lagoon" items={articles} renderCard={(article: Article) => (
-          <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border-t-2 border-lagoon bg-lagoon/[0.06] transition hover:-translate-y-1 hover:bg-lagoon/[0.12]">
+          <Link to={`${articleUrl(article)}`} className="group block overflow-hidden rounded-xl border-t-2 border-lagoon bg-lagoon/[0.06] transition hover:-translate-y-1 hover:bg-lagoon/[0.12]">
             {article.image && (
               <div className="aspect-[4/3] overflow-hidden">
                 <img src={cld(article.image, 600)} alt={article.title} className="h-full w-full object-cover transition group-hover:scale-105" />
@@ -579,7 +581,7 @@ function KurultaiSection({ articles }: { articles: Article[] }) {
           description="Full coverage of Kazakhstan's 2026 Kurultai elections — candidates, results and analysis."
         />
         <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
-          <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
+          <Link to={`${articleUrl(lead)}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
             <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
               {lead.image
                 ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -619,7 +621,7 @@ function NomadgamesSection({ articles }: { articles: Article[] }) {
         <CenterHeader tone="navy" title="World Nomad Games 2026" titleTo="/section/world-nomad-games-2026"
         />
         <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
-          <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
+          <Link to={`${articleUrl(lead)}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
             <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
               {lead.image
                 ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -656,7 +658,7 @@ function TheNuclearQuestion({ articles }: { articles: Article[] }) {
         <CenterHeader tone="navy" title="The Nuclear Question" titleTo="/section/the-nuclear-question"
         />
         <div className="grid gap-8 lg:grid-cols-[1.6fr,1fr]">
-          <Link to={`/article/${lead.id}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
+          <Link to={`${articleUrl(lead)}`} className="group relative overflow-hidden rounded-xl border border-primary/15">
             <div className="aspect-[16/9] overflow-hidden lg:aspect-[16/10]">
               {lead.image
                 ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -747,7 +749,7 @@ function TashkentSection({ articles }: { articles: Article[] }) {
   const hasRest = rest.length > 0;
 
   const LeadCard = (
-    <Link to={`/article/${lead.id}`} className="group relative block overflow-hidden rounded-xl">
+    <Link to={`${articleUrl(lead)}`} className="group relative block overflow-hidden rounded-xl">
       <div className={`overflow-hidden ${hasRest ? 'aspect-[16/9] max-h-[360px]' : 'aspect-[21/9] max-h-[420px]'}`}>
         {lead.image
           ? <img src={cld(lead.image, 1200)} alt={lead.title} className="h-full w-full object-cover transition duration-500 group-hover:scale-105" />
@@ -775,7 +777,7 @@ function TashkentSection({ articles }: { articles: Article[] }) {
             {LeadCard}
             <div className="flex flex-col divide-y divide-white/10">
               {rest.map((article, i) => (
-                <Link key={article.id} to={`/article/${article.id}`}
+                <Link key={article.id} to={`${articleUrl(article)}`}
                   className="group flex gap-4 py-4 first:pt-0 last:pb-0 transition hover:opacity-80">
                   <span className="mt-1 shrink-0 text-xl font-extrabold text-gold/40 leading-none w-6">
                     {String(i + 2).padStart(2, '0')}
@@ -842,7 +844,7 @@ function AviationSection({ articles }: { articles: Article[] }) {
   const hasRest = rest.length > 0;
 
   const MainCard = (
-    <Link to={`/article/${main.id}`}
+    <Link to={`${articleUrl(main)}`}
       className="group relative block overflow-hidden rounded-xl border border-azure/20 shadow-sm">
       <div className={`overflow-hidden ${hasRest ? 'aspect-[16/9] max-h-[360px]' : 'aspect-[21/9] max-h-[420px]'}`}>
         {main.image
@@ -870,7 +872,7 @@ function AviationSection({ articles }: { articles: Article[] }) {
             {MainCard}
             <div className="flex flex-col gap-3">
               {rest.slice(0, 4).map((article) => (
-                <Link key={article.id} to={`/article/${article.id}`}
+                <Link key={article.id} to={`${articleUrl(article)}`}
                   className="group relative flex gap-3 overflow-hidden rounded-lg border border-dashed border-azure/30 bg-azure/[0.04] p-3 transition hover:-translate-y-0.5 hover:bg-azure/[0.08]">
                   {article.image && (
                     <div className="h-16 w-20 flex-shrink-0 overflow-hidden rounded-md">
@@ -901,7 +903,7 @@ function HiddenHistoriesSection({ articles }: { articles: Article[] }) {
           description="Untold stories and forgotten chapters resurfaced — the histories that shaped today, rediscovered."
         />
         <ArrowCarousel tone="gold" items={articles} renderCard={(article: Article) => (
-          <Link to={`/article/${article.id}`}
+          <Link to={`${articleUrl(article)}`}
             className="group relative block overflow-hidden rounded-xl border border-gold/25 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg">
             <div className="relative aspect-[4/3] overflow-hidden">
               {article.image
@@ -935,7 +937,7 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
           description="In-depth diplomatic analysis, treaties, negotiations and foreign policy insights."
         />
         <ArrowCarousel tone="navy" items={articles} renderCard={(article: Article) => (
-          <Link to={`/article/${article.id}`} className="group block overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.08] transition hover:-translate-y-1 hover:bg-primary/[0.15]">
+          <Link to={`${articleUrl(article)}`} className="group block overflow-hidden rounded-xl border border-primary/25 bg-primary/[0.08] transition hover:-translate-y-1 hover:bg-primary/[0.15]">
             {article.image && (
               <div className="relative aspect-[4/3] overflow-hidden">
                 <img src={cld(article.image, 600)} alt={article.title} className="h-full w-full object-cover opacity-90 transition group-hover:scale-105" />
@@ -960,6 +962,7 @@ export function HomePage() {
     description: 'Londonpost delivers in-depth reporting, regional coverage and analysis on world affairs, diplomacy, economy and technology.',
     path: '/',
   });
+
   const staticUK      = useMemo(() => staticArticles.filter(a => a.region === 'United Kingdom').slice(0, 4), []);
   const staticEdPick  = useMemo(() => staticArticles.filter(a => a.featured).slice(0, 4), []);
   const staticIntvw   = useMemo(() => staticArticles.filter(a => a.category === 'Interviews' || a.topic === 'Interviews').slice(0, 4), []);
