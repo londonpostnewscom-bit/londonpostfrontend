@@ -3,6 +3,7 @@
 import { Link } from 'react-router-dom';
 import { Article } from '../data/siteData';
 import { cld } from '../utils/Cloudinary';
+import { articleUrl } from '../utils/articleUrl';
 
 /* Keep in sync with the TONE map in HomePage.tsx — duplicated locally
    so this card has no cross-file dependency and stays drop-in reusable.
@@ -36,7 +37,7 @@ export function ArticleCard({ article, onReadMore, tone = 'crimson' }: {
   const t = TONE[tone];
   return (
     <Link
-      to={`/article/${article.id}`}
+     to={articleUrl(article)}
       onClick={onReadMore ? () => onReadMore(article) : undefined}
       className={`group flex h-full flex-col overflow-hidden rounded-xl border bg-white transition hover:-translate-y-1 hover:shadow-lg ${t.border}`}
     >
