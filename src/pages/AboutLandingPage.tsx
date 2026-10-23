@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const cards = [
   ['Our Team', '/about/team', 'Leadership, editorial, advisory and growth teams.'],
@@ -8,6 +9,11 @@ const cards = [
 ];
 
 export function AboutLandingPage() {
+   usePageMeta({
+    title: 'About Us | Londonpost',
+    description: 'About Londonpost: our team, researchers and the work behind our reporting and analysis.',
+    path: '/about',
+  });
   return (
     <div className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
       <SectionHeading eyebrow="About" title="A modern editorial institution with global focus" description="Use this landing page to introduce your publication, editorial values and specialist teams." />
