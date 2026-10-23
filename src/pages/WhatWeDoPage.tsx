@@ -1,5 +1,6 @@
 import { SectionHeading } from '../components/SectionHeading';
 import { whatWeDo } from '../data/siteData';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const objectives = [
   'Positive image building in print and electronic media.',
@@ -19,6 +20,11 @@ const resources = [
 ];
 
 export function WhatWeDoPage() {
+    usePageMeta({
+    title: 'What We Do | Londonpost',
+    description: 'How Londonpost combines independent reporting, analysis, research and media support.',
+    path: '/about/what-we-do',
+  });
   return (
     <div className="mx-auto max-w-7xl px-4 py-14 lg:px-6">
       <SectionHeading
