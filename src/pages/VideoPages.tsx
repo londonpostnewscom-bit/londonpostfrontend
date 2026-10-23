@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
 import { SectionHeading } from '../components/SectionHeading';
 import { articles as staticArticles } from '../data/siteData';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -34,6 +35,11 @@ function PlayIcon() {
 }
 
 export function VideoPage() {
+    usePageMeta({
+    title: 'Video | Londonpost',
+    description: 'Video reports, documentary clips and analysis from the Londonpost global team.',
+    path: '/section/video',
+  });
   const navigate  = useNavigate();
   const [videos,   setVideos]   = useState<any[]>([]);
   const [loading,  setLoading]  = useState(true);
