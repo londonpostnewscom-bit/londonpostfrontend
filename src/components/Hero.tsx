@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { cld } from '../utils/Cloudinary';
+import { articleUrl } from '../utils/articleUrl';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -44,7 +45,7 @@ function mapArticle(a: any): HeroSlide {
     mediaType: a.videoId ? 'youtube' : 'image',
     mediaUrl: a.imageUrl || '',
     youtubeId: a.videoId || '',
-    ctaLink: a.section === 'video' ? `/video/${a._id}` : `/article/${a._id}`,
+        ctaLink: a.section === 'video' ? `/video/${a._id}` : articleUrl({ _id: a._id, slug: a.slug }),
     badgeText: a.category || 'Featured',
     previewCaption: [a.author, a.date].filter(Boolean).join(' · '),
     isArticle: true,
