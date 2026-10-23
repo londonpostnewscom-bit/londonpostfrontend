@@ -1,6 +1,9 @@
+
+
 import { useEffect, useState } from 'react';
 import { SectionHeading } from '../components/SectionHeading';
 import { PageSkeleton } from '../components/PageSkeleton';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -116,6 +119,11 @@ function MemberCard({ member }: { member: TeamMember }) {
 }
 
 export function TeamPage() {
+    usePageMeta({
+    title: 'Our Team | Londonpost',
+    description: 'Meet the people behind Londonpost, from leadership and editorial to advisory teams.',
+    path: '/about/team',
+  });
   const [sections, setSections] = useState<TeamSection[]>(teamCache || []);
   const [loading, setLoading] = useState(teamCache === null);
 
