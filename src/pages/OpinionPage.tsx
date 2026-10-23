@@ -1,3 +1,4 @@
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -7,6 +8,7 @@ import { useAuthorPhotos } from '../hooks/useAuthorPhotos';
 import { Article } from '../data/siteData';
 import { PageSkeleton } from '../components/PageSkeleton';
 import { parseArticleDate } from '../utils/articleBuckets';
+import { articleUrl } from '../utils/articleUrl';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -26,6 +28,7 @@ function toArticle(a: any): Article {
     featured: a.isFeatured || false,
     archived: a.isArchived || false,
     topic: a.category || '',
+     ...(a.slug ? { slug: a.slug } : {}),
     ...(Array.isArray(a.hashtags) ? { hashtags: a.hashtags } : {}),
     ...(a.section ? { section: a.section } : {}),
     ...(a.videoId ? { videoId: a.videoId } : {}),
@@ -158,7 +161,7 @@ export function OpinionPage() {
                     {visibleLatest.map((article) => (
                       <Link
                         key={article.id}
-                        to={`/article/${article.id}`}
+                         to={articleUrl(article)}
                         state={{ source: 'section' }}
                         className="group flex min-w-0 flex-col rounded-2xl border border-slate-200 bg-white p-6 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-md"
                       >
@@ -203,7 +206,7 @@ export function OpinionPage() {
                   {visibleArchived.map((article) => (
                     <Link
                       key={article.id}
-                      to={`/article/${article.id}`}
+                      to={articleUrl(article)}
                       className="flex min-w-0 items-center gap-4 rounded-xl border border-slate-100 bg-white p-4 transition hover:bg-slate-50"
                     >
                       <AuthorAvatar name={article.author} size="sm" />
