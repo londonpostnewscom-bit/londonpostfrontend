@@ -1,4 +1,5 @@
 
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -9,6 +10,7 @@ import { Article } from '../data/siteData';
 import { PageSkeleton } from '../components/PageSkeleton';
 import { parseArticleDate } from '../utils/articleBuckets';
 import { articleUrl } from '../utils/articleUrl';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -72,6 +74,11 @@ const GRID_BATCH = 6;
 const ARCHIVED_BATCH = 4;
 
 export function OpinionPage() {
+  usePageMeta({
+  title: 'Opinion | Londonpost',
+  description: 'Analysis and commentary from the Londonpost editorial team and contributing voices.',
+  path: '/section/opinion',
+});
   const [articles, setArticles] = useState<Article[]>(opinionCache || []);
   const [loading, setLoading] = useState(opinionCache === null);
   const [latestVisible, setLatestVisible] = useState(GRID_BATCH);
