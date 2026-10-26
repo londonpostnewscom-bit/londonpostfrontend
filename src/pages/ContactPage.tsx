@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { LocationIcon } from '../components/Icons';
 import { SectionHeading } from '../components/SectionHeading';
+import { usePageMeta } from '../utils/usePageMeta';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -9,6 +10,11 @@ const contactItems = [
 ];
 
 export function ContactPage() {
+   usePageMeta({
+    title: 'Contact Us | Londonpost',
+    description: 'Contact the Londonpost editorial and partnerships team for editorial enquiries, partnerships and general requests.',
+    path: '/contact',
+  });
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
