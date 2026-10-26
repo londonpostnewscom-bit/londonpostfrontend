@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { SectionHeading } from '../components/SectionHeading';
+import { usePageMeta } from '../utils/usePageMeta';
 
 // Replace these image paths with your actual asset filenames
 import asiaImg      from '../assets/region-asia.jpg';
@@ -79,6 +80,11 @@ const REGIONS = [
 ];
 
 export function RegionsLandingPage() {
+    usePageMeta({
+    title: 'World Regions | Londonpost',
+    description: 'Londonpost regional coverage: Asia, Middle East, Europe, Americas, Africa, Russia, Caucasus and Oceania.',
+    path: '/regions',
+  });
   const [featured1, featured2, ...rest] = REGIONS;
 
   return (
