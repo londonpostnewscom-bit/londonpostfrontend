@@ -1,3 +1,5 @@
+
+
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -8,6 +10,7 @@ import { cld } from '../utils/Cloudinary';
 import { AuthorAvatar } from '../components/AuthorAvatar';
 import { usePageMeta } from '../utils/usePageMeta';
 import { articleUrl } from '../utils/articleUrl';
+import { parseArticleDate } from '../utils/articleBuckets';
 type Tone = 'navy' | 'crimson' | 'gold' | 'lagoon' | 'azure';
 
 const TONE: Record<Tone, {
@@ -95,8 +98,15 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
 
     const mapSec = (key: string) => (sections[key] || []).map(toArticle);
     const mapReg = (key: string) => (regions[key] || []).map(toArticle);
-
+    let dc = (sections['diplomatic-corner'] || sections['geopolitical-dispatch'] || []).map(toArticle);
+    if (!dc.length) {
+      try {
+        const r = await fetch(`${API_URL}/section-articles/section/diplomatic-corner`);
+        if (r.ok) dc = (await r.json()).slice(0, 8).map(toArticle);
+      } catch {}
+    }
     const result: HomeFeedData = {
+      
       uk:   mapSec('uk'),
       ep:   (buckets['editors-picks'] || []).map(toArticle),
       inf:  (buckets['in-focus'] || []).map(toArticle),
@@ -106,7 +116,7 @@ async function fetchAllHomeFeeds(): Promise<HomeFeedData> {
       ca:   mapReg('central-asia'),
       eu:   mapReg('europe-home'),
       ru:   mapReg('russia-home'),
-      dc:   (sections['diplomatic-corner'] || sections['geopolitical-dispatch'] || []).map(toArticle),
+      dc,
       tash: mapSec('tashkent'),
       cauc: {
         armenia:    (caucasusR.armenia || []).map(toArticle),
@@ -941,7 +951,6 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
             {article.image && (
               <div className="relative aspect-[4/3] overflow-hidden">
                 <img src={cld(article.image, 600)} alt={article.title} className="h-full w-full object-cover opacity-90 transition group-hover:scale-105" />
-                <span className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white/70 bg-primary/70 text-[10px] font-black uppercase tracking-wide text-white backdrop-blur-sm">DC</span>
               </div>
             )}
             <div className="p-5">
@@ -954,6 +963,20 @@ function DiplomaticCornerSection({ articles }: { articles: Article[] }) {
       </div>
     </section>
   );
+}
+
+function sortNewestFirst<T extends { date?: string }>(items: T[]): T[] {
+  const maxYear = new Date().getFullYear() + 1;
+  const time = (a: T) => {
+    const d = parseArticleDate(a.date);
+    // Ignore mistyped dates (like year 29026) so they can't jump to the top.
+    return d && d.getFullYear() <= maxYear ? d.getTime() : -Infinity;
+  };
+  return [...items].sort((x, y) => {
+    const tx = time(x), ty = time(y);
+    if (tx === ty) return 0;
+    return ty > tx ? 1 : -1;
+  });
 }
 
 export function HomePage() {
@@ -1003,10 +1026,10 @@ export function HomePage() {
   const displayCA       = feed.ca;
   const displayEurope   = feed.eu;
   const displayRussia   = feed.ru;
-  const displayDiplo    = feed.dc;
+   const displayDiplo    = sortNewestFirst(feed.dc);
   const displayTashkent = feed.tash;
   const displayCaucasus = feed.cauc;
-  const displayAviation = feed.avi;
+    const displayAviation = sortNewestFirst(feed.avi);
   const displayHiddenHistories = feed.hh;
   const displayKurultai = feed.kur;
   const displayNomadgames = feed.ng;
