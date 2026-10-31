@@ -1,6 +1,5 @@
 
 
-
 import { useEffect, useState, useRef } from 'react';
 import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AdBanner } from '../components/AdBanner';
@@ -8,6 +7,7 @@ import { AuthorAvatar } from '../components/AuthorAvatar';
 import { cld } from '../utils/Cloudinary';
 import { ArticleSkeleton } from '../components/PageSkeleton';
 import { articleUrl, isMongoId } from '../utils/articleUrl';
+import { formatArticleTimes } from '../utils/articleTime';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Per-article in-memory cache, same pattern as Home/Opinion — survives SPA
@@ -644,6 +644,7 @@ const isOldId = isMongoId(param);
   const isVideo = article.section === 'video' && article.videoId;
   const isOpinion = article.section === 'opinion';
   const hasBlocks = Array.isArray(article.blocks) && article.blocks.length > 0;
+    const times = formatArticleTimes(article);
 
   return (
     <div>
@@ -732,7 +733,13 @@ const isOldId = isMongoId(param);
               <div className="flex flex-wrap items-center gap-2 text-sm text-slate-400">
                 <span>By <span className="font-semibold text-slate-600">{article.author}</span></span>
                 <span>·</span>
-                <span>{article.date}</span>
+                                <span className="font-semibold text-slate-500">{times.published}</span>
+                {times.updated && (
+                  <>
+                    <span>|</span>
+                    <span className="text-slate-400">{times.updated}</span>
+                  </>
+                )}
                 {(article.region || article.subCategory) && (
                   <>
                     <span>·</span>
